@@ -683,7 +683,7 @@ export default function AdminPartidosPage() {
                     <th className="text-left px-3 py-2">Partido</th>
                     <th className="text-left px-3 py-2">Estado</th>
                     <th className="text-left px-3 py-2">Marcador</th>
-                    <th className="text-left px-3 py-2 min-w-[230px]">External ID</th>
+                    <th className="text-left px-3 py-2 min-w-[260px]">External ID</th>
                     <th className="text-left px-3 py-2">Modo</th>
                   </tr>
                 </thead>
@@ -804,7 +804,7 @@ export default function AdminPartidosPage() {
                               </Button>
                             </div>
                           ) : linked ? (
-                            <div className="flex items-center gap-2 min-w-[200px]">
+                            <div className="flex items-center gap-2 min-w-[230px] flex-nowrap">
                               <div className="flex flex-col leading-tight min-w-0 flex-1">
                                 <span
                                   className="font-mono text-[11px] text-blue-700 truncate"
@@ -820,19 +820,23 @@ export default function AdminPartidosPage() {
                               </div>
                               <button
                                 onClick={() => { setEditingId(m.id); setEditingValue(m.externalId ?? '') }}
-                                className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-600 hover:text-blue-700 hover:bg-blue-50 border border-gray-200"
+                                className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-blue-600 bg-blue-50 hover:text-white hover:bg-blue-600 border border-blue-200 transition shadow-sm"
                                 title="Editar external ID"
                                 aria-label="Editar"
                               >
-                                <Pencil size={13} />
+                                <Pencil size={15} strokeWidth={2.25} />
                               </button>
                               <button
-                                onClick={() => linkMatch(m.id, null)}
-                                className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-red-600 hover:text-white hover:bg-red-500 border border-red-200"
-                                title="Desvincular partido"
+                                onClick={() => {
+                                  if (confirm(`¿Desvincular ${m.homeName} vs ${m.awayName} de ESPN?`)) {
+                                    linkMatch(m.id, null)
+                                  }
+                                }}
+                                className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-red-600 bg-red-50 hover:text-white hover:bg-red-600 border border-red-200 transition shadow-sm"
+                                title="Desvincular de ESPN"
                                 aria-label="Desvincular"
                               >
-                                <Unlink size={13} />
+                                <Unlink size={15} strokeWidth={2.25} />
                               </button>
                             </div>
                           ) : (
