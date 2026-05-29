@@ -40,7 +40,11 @@ export default async function MisQuinielasPage() {
   const canBrowseAll = isSuperAdmin || isUserActive?.status === 'ACTIVE'
 
   const memberships = await prisma.quinielaMember.findMany({
-    where: { userId: session.user.id },
+    where: {
+      userId: session.user.id,
+      // Hide archived quinielas from regular users; super admins still see everything
+      ...(isSuperAdmin ? {} : { quiniela: { status: { not: 'ARCHIVED' } } }),
+    },
     include: {
       quiniela: {
         include: {

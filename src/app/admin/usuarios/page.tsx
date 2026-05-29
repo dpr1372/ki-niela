@@ -7,8 +7,9 @@ import { toast } from 'sonner'
 import AppShell from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ShieldCheck, ShieldOff, UserCheck, UserX } from 'lucide-react'
+import { ShieldCheck, ShieldOff, UserCheck, UserX, Trophy } from 'lucide-react'
 import { BallLoader } from '@/components/ui/BallLoader'
+import { Switch } from '@/components/ui/switch'
 
 type AdminUser = {
   id: string
@@ -17,6 +18,15 @@ type AdminUser = {
   globalRole: 'SUPER_ADMIN' | 'USER'
   status: 'ACTIVE' | 'INACTIVE'
   createdAt: string
+}
+
+type AdminQuiniela = {
+  id: string
+  name: string
+  status: 'ACTIVE' | 'CLOSED' | 'ARCHIVED'
+  inviteCode: string | null
+  event: { id: string; name: string }
+  _count: { members: number }
 }
 
 const STATUS_LABEL: Record<AdminUser['status'], string> = {
@@ -33,6 +43,7 @@ export default function AdminUsuariosPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [users, setUsers] = useState<AdminUser[] | null>(null)
+  const [quinielas, setQuinielas] = useState<AdminQuiniela[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE'>('ALL')
 
@@ -47,6 +58,7 @@ export default function AdminUsuariosPage() {
       return
     }
     void loadUsers()
+    void loadQuinielas()
   }, [session, status, router])
 
   async function loadUsers() {
@@ -60,6 +72,32 @@ export default function AdminUsuariosPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadQuinielas() {
+    try {
+      const res = await fetch('/api/admin/quinielas')
+      if (!res.ok) throw new Error('Error')
+      setQuinielas(await res.json())
+    } catch {
+      toast.error('No se pudo cargar la lista de quinielas.')
+    }
+  }
+
+  async function toggleQuinielaStatus(q: AdminQuiniela, enable: boolean) {
+    const newStatus = enable ? 'ACTIVE' : 'ARCHIVED'
+    const res = await fetch(`/api/admin/quinielas/${q.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    if (!res.ok) {
+      const info = await res.json().catch(() => null)
+      toast.error(info?.error ?? 'Error al actualizar quiniela.')
+      return
+    }
+    toast.success(enable ? `${q.name} habilitada.` : `${q.name} archivada.`)
+    await loadQuinielas()
   }
 
   async function patchUser(userId: string, body: Record<string, unknown>, successMsg: string) {
@@ -117,6 +155,61 @@ export default function AdminUsuariosPage() {
           ))}
         </div>
 
+        {/* ── Sección Quinielas ─────────────────────────────────────────────── */}
+        <div className="card-pitch rounded-xl p-5 space-y-4">
+          <div>
+            <h2 className="text-xl font-black text-pitch-dark flex items-center gap-2">
+              <Trophy className="text-amber-500" size={22} />
+              Visibilidad de Quinielas
+            </h2>
+            <p className="text-xs text-gray-600 mt-1">
+              Habilita o archiva quinielas. Las archivadas no aparecen para los usuarios y no pueden recibir nuevas solicitudes.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {quinielas === null && <BallLoader label="Cargando quinielas…" />}
+            {quinielas?.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">No hay quinielas creadas.</p>
+            )}
+            {quinielas?.map((q) => {
+              const enabled = q.status === 'ACTIVE'
+              return (
+                <div
+                  key={q.id}
+                  className={`flex items-center justify-between gap-3 rounded-lg border p-3 transition ${
+                    enabled
+                      ? 'bg-white border-emerald-200'
+                      : 'bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className={`font-semibold text-sm ${enabled ? 'text-gray-900' : 'text-gray-500'} truncate`}>
+                      {q.name}
+                    </p>
+                    <p className="text-[11px] text-gray-500 truncate">
+                      {q.event.name} · {q._count.members} miembros{q.inviteCode ? ` · ${q.inviteCode}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                        enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'
+                      }`}
+                    >
+                      {enabled ? 'Habilitada' : q.status === 'ARCHIVED' ? 'Archivada' : 'Cerrada'}
+                    </span>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={(v) => toggleQuinielaStatus(q, v)}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ── Sección Usuarios ──────────────────────────────────────────────── */}
         <div className="card-pitch rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
