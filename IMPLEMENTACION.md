@@ -18,7 +18,9 @@ Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qu
 8. [Posiciones: SUPER_ADMIN excluido del ranking](#8-posiciones-super_admin-excluido-del-ranking)
 9. [Auto-vincular partidos: matching difuso de nombres](#9-auto-vincular-partidos-matching-difuso-de-nombres)
 10. [Endpoint diagnóstico de mailer](#10-endpoint-diagnóstico-de-mailer)
-11. [Setup local + troubleshooting](#11-setup-local--troubleshooting)
+11. [Quiniela "DP-TI COPA MUNDO 2026" (clon del Mundial)](#12-quiniela-dp-ti-copa-mundo-2026-clon-del-mundial)
+12. [Bracket eliminatorio Mundial 2026 con calendario FIFA oficial](#13-bracket-eliminatorio-mundial-2026-con-calendario-fifa-oficial)
+13. [Setup local + troubleshooting](#11-setup-local--troubleshooting)
 
 ---
 
@@ -256,6 +258,102 @@ fetch('/api/admin/diag/mailer', {
 
 ---
 
+## 12. Quiniela "DP-TI COPA MUNDO 2026" (clon del Mundial)
+
+Quiniela paralela para el equipo DP-TI sobre el mismo evento del Mundial 2026.
+
+**Script:** `scripts/seed-dpti-mundial.ts` — idempotente, lee la quiniela origen
+(`quiniela-mundial-2026`) y crea/actualiza una nueva con misma config, mismos
+partidos estrella y el admin global como QUINIELA_ADMIN. **No** clona miembros
+ni predicciones (cada quiniela tiene su propia comunidad).
+
+**Identidades:**
+- `id`: `quiniela-dpti-mundial-2026`
+- `name`: `DP-TI COPA MUNDO 2026`
+- `inviteCode`: `DPTI2026`
+- `eventId`: `event-wc2026` (mismo Mundial)
+- `status`: `ARCHIVED` (oculta para no-admins por ahora; activar via switch en `/admin/usuarios` cuando se quiera lanzar)
+
+**Ejecutar:**
+```bash
+# Local
+set -a && . ./.env.local && set +a
+npx tsx scripts/seed-dpti-mundial.ts
+
+# Railway
+DATABASE_URL=<railway-url> npx tsx scripts/seed-dpti-mundial.ts
+```
+
+**Estado en producción (mayo 2026):** ambas quinielas (`Ki-Niela Mundial 2026` y
+`DP-TI COPA MUNDO 2026`) están `ARCHIVED` y comparten 12 partidos estrella
+sincronizados.
+
+### Sync de partidos estrella entre quinielas
+
+`scripts/sync-mundial-stars.ts` aplica un set fijo de matchIds como estrella a
+ambas quinielas en una pasada (idempotente, hace skip si el match no existe).
+Útil para mantener parity cuando se marca un partido como estrella en una y se
+quiere reflejar en la otra.
+
+```bash
+DATABASE_URL=<url> npx tsx scripts/sync-mundial-stars.ts
+```
+
+---
+
+## 13. Bracket eliminatorio Mundial 2026 con calendario FIFA oficial
+
+`scripts/seed-mundial-knockouts.ts` siembra los 30 partidos eliminatorios del
+Mundial 2026 con fechas y sedes oficiales según el calendario FIFA, y ajusta el
+3er lugar y la final con sus sedes/horarios correctos.
+
+### Estructura del bracket (32 partidos KO totales)
+
+| ID en BD | Fase | Cantidad | Fechas (UTC) |
+|---|---|---|---|
+| `m-r32-73` … `m-r32-88` | ROUND_OF_32 | 16 | 28 jun – 4 jul 2026 |
+| `m-r16-89` … `m-r16-96` | ROUND_OF_16 | 8 | 4 – 7 jul 2026 |
+| `m-qf-97` … `m-qf-100` | QUARTER_FINAL | 4 | 9, 10, 11 jul 2026 |
+| `m-sf-101`, `m-sf-102` | SEMI_FINAL | 2 | 14, 15 jul 2026 |
+| `match-3er-lugar` | THIRD_PLACE | 1 | 18 jul 2026 (Hard Rock) |
+| `match-final` | FINAL | 1 | 19 jul 2026 19:00 UTC = 3pm EDT (MetLife) |
+
+> **Numeración:** los IDs `m-r32-73`..`m-sf-102` corresponden al match number
+> oficial FIFA (73-104). Los placeholders en `placeholderHomeName` /
+> `placeholderAwayName` siguen el mismo formato (`"Ganador 73"`, `"1A"`,
+> `"3º (A/B/C/D/F)"`) para que coincidan con la planilla pública del torneo.
+
+### Cómo se sembraron las eliminatorias en producción
+
+```bash
+DATABASE_URL=<railway-url> npx tsx scripts/seed-mundial-knockouts.ts
+```
+
+El script:
+1. Hace `upsert` de los 6 matchdays de eliminatoria (`md-octavos`,
+   `md-dieciseis`, `md-cuartos`, `md-semis`, `md-3er`, `md-final`).
+2. Hace `upsert` de los 30 partidos KO (R32 + R16 + QF + SF) con stadiumId,
+   matchdayId, phase, kickoffAtUtc, kickoffAtCostaRica y placeholders.
+3. **Actualiza** `match-3er-lugar` (sede a Hard Rock, fecha 18 jul 21:00 UTC)
+   y `match-final` (sede MetLife, **fecha corregida** a 19 jul 19:00 UTC =
+   3pm EDT — antes estaba a 22:00 UTC).
+
+### Pendiente diferido: resolver placeholders con equipos reales
+
+Después del **27 jun 2026** (fin de fase de grupos):
+
+1. Reemplazar `placeholder*` por `homeTeamId`/`awayTeamId` reales en cada R32
+   conforme se conozcan los 32 clasificados (1° y 2° de cada grupo + 8 mejores
+   terceros — el cruce concreto sale del bracket FIFA).
+2. Conforme avance el torneo, llenar R16/QF/SF/Final con los ganadores de la
+   ronda anterior.
+3. Después de cada batch de updates, `POST /api/jobs/recalculate-scores` con
+   `x-cron-secret` para refrescar puntos provisionales.
+
+**Bracket de avance oficial:** [Wikipedia 2026 FIFA WC Knockout Stage](https://en.wikipedia.org/wiki/2026_FIFA_World_Cup_knockout_stage).
+
+---
+
 ## 11. Setup local + troubleshooting
 
 ### Setup
@@ -329,3 +427,7 @@ npm run dev   # http://localhost:3001
 | `e7e3678` | Botón Desvincular siempre visible |
 | `7c8706b` | Fix Zod externalProvider:null al desvincular |
 | `72722c3` | Excluir SUPER_ADMIN del leaderboard y recalc |
+| `6cc78f5` | docs: actualizar README, IMPLEMENTACION, GUIA y MARCADORES_EN_VIVO |
+| `0b485c8` | feat(seed): clonar quiniela "DP-TI COPA MUNDO 2026" |
+| `dbaa9ac` | feat(seed): script para sincronizar partidos estrella del Mundial 2026 |
+| `4bd314e` | feat(seed): bracket eliminatorio Mundial 2026 con calendario FIFA oficial |

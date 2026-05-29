@@ -75,6 +75,9 @@ npm run test:watch       # vitest watch
 npx prisma studio                          # GUI de BD
 npx prisma migrate dev --name "<nombre>"   # nueva migración
 npx tsx scripts/seed-amistosos.ts          # crear quiniela amistosos
+npx tsx scripts/seed-mundial-knockouts.ts  # bracket eliminatorio Mundial 2026 (calendario FIFA)
+npx tsx scripts/seed-dpti-mundial.ts       # clonar Mundial → "DP-TI COPA MUNDO 2026"
+npx tsx scripts/sync-mundial-stars.ts      # sincronizar partidos estrella entre quinielas Mundial
 ```
 
 ## Deploy
