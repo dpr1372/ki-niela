@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { Home, Trophy, BarChart2, Settings, LogOut, Menu, X, CalendarDays, Swords, Radio, Users, ShieldCheck, UserCircle, ChevronDown } from 'lucide-react'
+import { Home, Trophy, BarChart2, Settings, LogOut, Menu, X, CalendarDays, Swords, Radio, Users, ShieldCheck, UserCircle, ChevronDown, Link2 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
@@ -50,7 +50,10 @@ export default function AppShell({ children, quinielaId, quinielaName }: Props) 
   const baseNav = [
     { href: '/quinielas', label: 'Mis Quinielas', icon: Home },
     ...(isSuperAdmin && !quinielaId
-      ? [{ href: '/admin/usuarios', label: 'Usuarios (Admin)', icon: ShieldCheck }]
+      ? [
+          { href: '/admin/usuarios', label: 'Usuarios (Admin)', icon: ShieldCheck },
+          { href: '/admin/partidos', label: 'Partidos (Admin)', icon: Link2 },
+        ]
       : []),
   ]
 
