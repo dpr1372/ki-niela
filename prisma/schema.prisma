@@ -1,0 +1,308 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum GlobalRole {
+  SUPER_ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum QuinielaVisibility {
+  PUBLIC
+  PRIVATE
+  INVITE_ONLY
+}
+
+enum QuinielaStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum MemberRole {
+  QUINIELA_ADMIN
+  PARTICIPANT
+}
+
+enum MemberStatus {
+  INVITED
+  PENDING_APPROVAL
+  ACTIVE
+  INACTIVE
+  REJECTED
+}
+
+enum MatchPhase {
+  GROUPS
+  ROUND_OF_32
+  ROUND_OF_16
+  QUARTER_FINAL
+  SEMI_FINAL
+  THIRD_PLACE
+  FINAL
+}
+
+enum MatchStatus {
+  PROGRAMADO
+  BLOQUEADO
+  EN_JUEGO
+  MEDIO_TIEMPO
+  TIEMPO_EXTRA
+  PENALES
+  FINALIZADO
+  POSTERGADO
+  CANCELADO
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  globalRole   GlobalRole @default(USER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  quinielas          Quiniela[]      @relation("CreatedQuinielas")
+  quinielaMembers    QuinielaMember[]
+  predictions        Prediction[]
+  scores             Score[]
+  auditLogsAsActor   AuditLog[]      @relation("AuditActor")
+  approvedMembers    QuinielaMember[] @relation("ApprovedBy")
+  deactivatedMembers QuinielaMember[] @relation("DeactivatedBy")
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  sport       String   @default("football")
+  startDate   DateTime
+  endDate     DateTime
+  timezone    String   @default("America/Costa_Rica")
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quinielas  Quiniela[]
+  teams      Team[]
+  stadiums   Stadium[]
+  matchdays  Matchday[]
+  matches    Match[]
+  predictions Prediction[]
+}
+
+model Quiniela {
+  id                       String             @id @default(cuid())
+  eventId                  String
+  name                     String
+  description              String?
+  visibility               QuinielaVisibility @default(INVITE_ONLY)
+  status                   QuinielaStatus     @default(ACTIVE)
+  randomPredictionsEnabled Boolean            @default(true)
+  randomMinGoals           Int                @default(0)
+  randomMaxGoals           Int                @default(7)
+  lockMinutesBeforeMatch   Int                @default(10)
+  timezone                 String             @default("America/Costa_Rica")
+  inviteCode               String?            @unique
+  createdByUserId          String
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  event       Event            @relation(fields: [eventId], references: [id])
+  createdBy   User             @relation("CreatedQuinielas", fields: [createdByUserId], references: [id])
+  members     QuinielaMember[]
+  starMatches QuinielaStarMatch[]
+  predictions Prediction[]
+  scores      Score[]
+}
+
+model QuinielaMember {
+  id                  String       @id @default(cuid())
+  quinielaId          String
+  userId              String
+  role                MemberRole   @default(PARTICIPANT)
+  status              MemberStatus @default(PENDING_APPROVAL)
+  autoPredictionsEnabled Boolean   @default(true)
+  joinedAt            DateTime     @default(now())
+  approvedAt          DateTime?
+  approvedByUserId    String?
+  deactivatedAt       DateTime?
+  deactivatedByUserId String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  quiniela      Quiniela @relation(fields: [quinielaId], references: [id])
+  user          User     @relation(fields: [userId], references: [id])
+  approvedBy    User?    @relation("ApprovedBy", fields: [approvedByUserId], references: [id])
+  deactivatedBy User?    @relation("DeactivatedBy", fields: [deactivatedByUserId], references: [id])
+
+  @@unique([quinielaId, userId])
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  eventId   String
+  name      String
+  fifaCode  String?
+  flagUrl   String?
+  groupCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event        Event   @relation(fields: [eventId], references: [id])
+  homeMatches  Match[] @relation("HomeTeam")
+  awayMatches  Match[] @relation("AwayTeam")
+  wonMatches   Match[] @relation("WinnerTeam")
+}
+
+model Stadium {
+  id        String   @id @default(cuid())
+  eventId   String
+  name      String
+  city      String
+  country   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event   Event   @relation(fields: [eventId], references: [id])
+  matches Match[]
+}
+
+model Matchday {
+  id        String   @id @default(cuid())
+  eventId   String
+  name      String
+  number    Int
+  phase     MatchPhase
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event   Event   @relation(fields: [eventId], references: [id])
+  matches Match[]
+}
+
+model Match {
+  id                   String      @id @default(cuid())
+  eventId              String
+  homeTeamId           String?
+  awayTeamId           String?
+  placeholderHomeName  String?
+  placeholderAwayName  String?
+  stadiumId            String?
+  matchdayId           String?
+  phase                MatchPhase
+  groupCode            String?
+  kickoffAtUtc         DateTime
+  kickoffAtCostaRica   DateTime
+  status               MatchStatus @default(PROGRAMADO)
+  liveHomeGoals        Int?
+  liveAwayGoals        Int?
+  officialHomeGoals    Int?
+  officialAwayGoals    Int?
+  penaltyHomeGoals     Int?
+  penaltyAwayGoals     Int?
+  winnerTeamId         String?
+  wentToExtraTime      Boolean     @default(false)
+  wentToPenalties      Boolean     @default(false)
+  liveUpdatedAt        DateTime?
+  resultConfirmedAt    DateTime?
+  prelockNotifiedAt    DateTime?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  event       Event      @relation(fields: [eventId], references: [id])
+  homeTeam    Team?      @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam    Team?      @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  winnerTeam  Team?      @relation("WinnerTeam", fields: [winnerTeamId], references: [id])
+  stadium     Stadium?   @relation(fields: [stadiumId], references: [id])
+  matchday    Matchday?  @relation(fields: [matchdayId], references: [id])
+  starMatches QuinielaStarMatch[]
+  predictions Prediction[]
+  scores      Score[]
+}
+
+model QuinielaStarMatch {
+  id         String   @id @default(cuid())
+  quinielaId String
+  matchId    String
+  isStar     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  quiniela Quiniela @relation(fields: [quinielaId], references: [id])
+  match    Match    @relation(fields: [matchId], references: [id])
+
+  @@unique([quinielaId, matchId])
+}
+
+model Prediction {
+  id                  String   @id @default(cuid())
+  quinielaId          String
+  eventId             String
+  userId              String
+  matchId             String
+  predictedHomeGoals  Int
+  predictedAwayGoals  Int
+  generatedByBot      Boolean  @default(false)
+  lockedAt            DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  quiniela Quiniela @relation(fields: [quinielaId], references: [id])
+  event    Event    @relation(fields: [eventId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+  match    Match    @relation(fields: [matchId], references: [id])
+  score    Score?
+
+  @@unique([quinielaId, userId, matchId])
+}
+
+model Score {
+  id           String   @id @default(cuid())
+  quinielaId   String
+  eventId      String
+  userId       String
+  matchId      String
+  predictionId String   @unique
+  points       Int
+  reason       String
+  isStarMatch  Boolean  @default(false)
+  calculatedAt DateTime @default(now())
+
+  quiniela   Quiniela   @relation(fields: [quinielaId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+  match      Match      @relation(fields: [matchId], references: [id])
+  prediction Prediction @relation(fields: [predictionId], references: [id])
+
+  @@unique([quinielaId, userId, matchId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  oldValue    Json?
+  newValue    Json?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id])
+}

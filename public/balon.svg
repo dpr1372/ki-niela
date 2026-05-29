@@ -1,0 +1,35 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shadow -->
+  <ellipse cx="100" cy="178" rx="62" ry="12" fill="rgba(0,0,0,0.18)"></ellipse>
+
+  <!-- Ball base -->
+  <circle cx="100" cy="96" r="78" fill="#ffffff" stroke="#111827" stroke-width="4"></circle>
+
+  <!-- Center pentagon -->
+  <polygon points="100,54 132,77 120,115 80,115 68,77" fill="#111827"></polygon>
+
+  <!-- Top panels -->
+  <polygon points="100,18 124,36 100,54 76,36" fill="#111827"></polygon>
+  <polygon points="36,70 50,42 76,36 68,77" fill="#111827"></polygon>
+  <polygon points="164,70 150,42 124,36 132,77" fill="#111827"></polygon>
+
+  <!-- Bottom panels -->
+  <polygon points="52,140 80,115 100,140 82,166" fill="#111827"></polygon>
+  <polygon points="148,140 120,115 100,140 118,166" fill="#111827"></polygon>
+
+  <!-- Connecting lines -->
+  <line x1="100" y1="54" x2="100" y2="18" stroke="#111827" stroke-width="3"></line>
+  <line x1="132" y1="77" x2="164" y2="70" stroke="#111827" stroke-width="3"></line>
+  <line x1="120" y1="115" x2="148" y2="140" stroke="#111827" stroke-width="3"></line>
+  <line x1="80" y1="115" x2="52" y2="140" stroke="#111827" stroke-width="3"></line>
+  <line x1="68" y1="77" x2="36" y2="70" stroke="#111827" stroke-width="3"></line>
+
+  <!-- Curved outer details -->
+  <path d="M76 36 C55 45 39 62 30 84" fill="none" stroke="#111827" stroke-width="3"></path>
+  <path d="M124 36 C145 45 161 62 170 84" fill="none" stroke="#111827" stroke-width="3"></path>
+  <path d="M52 140 C63 156 79 166 100 171" fill="none" stroke="#111827" stroke-width="3"></path>
+  <path d="M148 140 C137 156 121 166 100 171" fill="none" stroke="#111827" stroke-width="3"></path>
+
+  <!-- Highlight -->
+  <circle cx="72" cy="58" r="18" fill="rgba(255,255,255,0.35)"></circle>
+</svg>

@@ -1,0 +1,264 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* === Ki-Niela: tema World Cup 2026 === */
+@layer utilities {
+  /* Fondo global app — fondo deportivo claro con balón (login, registro, Mis Quinielas) */
+  .bg-pitch {
+    background-color: #ecfeff;
+    background-image:
+      linear-gradient(180deg, rgba(236, 254, 255, 0.55) 0%, rgba(207, 250, 254, 0.55) 100%),
+      url('/brand/login-bg.png');
+    background-size: cover, cover;
+    background-position: center, center;
+    background-repeat: no-repeat, no-repeat;
+    background-attachment: fixed, fixed;
+  }
+
+  /* Fondo dentro de una quiniela — fondo_v2 con velo más claro/azulado para diferenciarlo */
+  .bg-pitch-quiniela {
+    background-color: #0e6e7d;
+    background-image:
+      linear-gradient(180deg, rgba(236, 254, 255, 0.82) 0%, rgba(207, 250, 254, 0.86) 50%, rgba(254, 249, 195, 0.78) 100%),
+      url('/wc2026/fondo_v2.png');
+    background-size: cover, cover;
+    background-position: center, center;
+    background-repeat: no-repeat, no-repeat;
+    background-attachment: fixed, fixed;
+  }
+
+  /* Banner mundial — degradado profundo dorado/azul que contrasta con el fondo claro */
+  .bg-worldcup-banner {
+    background-color: #0b1733;
+    background-image:
+      radial-gradient(ellipse at top right, rgba(245, 184, 0, 0.45) 0%, rgba(245, 184, 0, 0) 55%),
+      radial-gradient(ellipse at bottom left, rgba(16, 185, 129, 0.35) 0%, rgba(16, 185, 129, 0) 60%),
+      linear-gradient(135deg, #0b1733 0%, #1e3a8a 45%, #0e6e7d 100%);
+    background-size: cover, cover, cover;
+    background-position: center, center, center;
+    background-repeat: no-repeat, no-repeat, no-repeat;
+  }
+
+  /* Header navbar — blanco con borde dorado para máximo contraste con el logo */
+  .bg-pitch-header {
+    background:
+      linear-gradient(to right, #ffffff 0%, #f8fafc 50%, #ffffff 100%);
+    box-shadow:
+      0 2px 0 #f5b800,
+      0 4px 12px rgba(8, 51, 68, 0.10);
+    color: #083344;
+  }
+
+  /* Card sobre fondo WC2026 — blanco sólido + borde teal y sombra reforzada para contraste */
+  .card-pitch {
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(2px);
+    border: 1px solid rgba(14, 110, 125, 0.22);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 2px 6px rgba(8, 51, 68, 0.10),
+      0 8px 20px rgba(8, 51, 68, 0.08);
+  }
+
+  .card-pitch-hover {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .card-pitch-hover:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.8) inset,
+      0 4px 8px rgba(15, 30, 70, 0.12),
+      0 8px 24px rgba(15, 30, 70, 0.08);
+  }
+
+  /* Headers de sección con acento dorado */
+  .section-header {
+    position: relative;
+    padding-left: 12px;
+  }
+  .section-header::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 4px;
+    background: linear-gradient(to bottom, #f5b800, #d97706);
+    border-radius: 2px;
+  }
+
+  /* Animación pulso para "EN VIVO" */
+  @keyframes live-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+  }
+  .live-dot {
+    animation: live-pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Badge "EN VIVO" rojo deportivo */
+  .badge-live {
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+
+  .text-pitch-dark { color: #083344; }
+  .text-pitch-green { color: #0e6e7d; }
+  .text-pitch-gold { color: #d97706; }
+  .text-pitch-teal { color: #1aa6b7; }
+
+  .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+
+  /* Ball loader: bounce + spin */
+  @keyframes ball-bounce {
+    0%, 100% { transform: translate(-50%, 0); animation-timing-function: cubic-bezier(0.25, 0, 0.4, 1); }
+    50% { transform: translate(-50%, 18px); animation-timing-function: cubic-bezier(0.6, 0, 0.75, 1); }
+  }
+  @keyframes ball-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  @keyframes ball-shadow {
+    0%, 100% { transform: translateX(-50%) scaleX(1); opacity: 0.35; }
+    50% { transform: translateX(-50%) scaleX(0.6); opacity: 0.6; }
+  }
+  .ball-bounce { animation: ball-bounce 0.65s infinite; }
+  .ball-spin { animation: ball-spin 1.2s linear infinite; }
+  .ball-shadow { animation: ball-shadow 0.65s infinite; transform-origin: center; }
+}
