@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import AppShell from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -115,16 +115,28 @@ export default function ConfiguracionPage() {
 
   const totalStars = starSet.size
 
-  const { register, handleSubmit, watch, setValue, formState: { isSubmitting, errors } } = useForm<ConfigForm>({
+  const { register, handleSubmit, watch, setValue, reset, formState: { isSubmitting, errors } } = useForm<ConfigForm>({
     resolver: zodResolver(configSchema),
-    values: data ? {
-      name: data.quiniela?.name ?? '',
-      lockMinutesBeforeMatch: data.quiniela?.lockMinutesBeforeMatch ?? 10,
-      randomPredictionsEnabled: data.quiniela?.randomPredictionsEnabled ?? true,
-      randomMinGoals: data.quiniela?.randomMinGoals ?? 0,
-      randomMaxGoals: data.quiniela?.randomMaxGoals ?? 7,
-    } : undefined,
+    defaultValues: {
+      name: '',
+      lockMinutesBeforeMatch: 10,
+      randomPredictionsEnabled: true,
+      randomMinGoals: 0,
+      randomMaxGoals: 7,
+    },
   })
+
+  useEffect(() => {
+    if (data?.quiniela) {
+      reset({
+        name: data.quiniela.name ?? '',
+        lockMinutesBeforeMatch: data.quiniela.lockMinutesBeforeMatch ?? 10,
+        randomPredictionsEnabled: data.quiniela.randomPredictionsEnabled ?? true,
+        randomMinGoals: data.quiniela.randomMinGoals ?? 0,
+        randomMaxGoals: data.quiniela.randomMaxGoals ?? 7,
+      })
+    }
+  }, [data, reset])
 
   const randomEnabled = watch('randomPredictionsEnabled')
 
