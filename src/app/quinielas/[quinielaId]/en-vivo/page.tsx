@@ -1,49 +1,16 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import Image from 'next/image'
 import AppShell from '@/components/layout/AppShell'
 import { MatchStatusBadge } from '@/components/quiniela/MatchStatusBadge'
 import { flagUrl } from '@/lib/flags'
-import { Star, Bot, User, Trophy, Radio } from 'lucide-react'
+import { Star, Bot, User, Trophy, Radio, Wifi, WifiOff } from 'lucide-react'
 import { BallLoader } from '@/components/ui/BallLoader'
+import { useLivePredictions, type LiveMatch, type LiveProfile as Profile } from '@/hooks/useLivePredictions'
 
 type LiveFilter = 'all' | 'live' | 'finished'
-
-type Profile = {
-  userId: string
-  userName: string
-  isSelf: boolean
-  hasPrediction: boolean
-  predictedHome: number | null
-  predictedAway: number | null
-  generatedByBot: boolean
-  livePoints: number | null
-  liveReason: string | null
-  isProvisional: boolean
-}
-
-type LiveMatch = {
-  id: string
-  status: string
-  phase: string
-  isStar: boolean
-  kickoffAtUtc: string
-  homeTeam?: { name: string; fifaCode?: string | null; flagUrl?: string | null } | null
-  awayTeam?: { name: string; fifaCode?: string | null; flagUrl?: string | null } | null
-  placeholderHomeName?: string | null
-  placeholderAwayName?: string | null
-  stadium?: { name: string; city?: string | null } | null
-  matchday?: { name: string; phase: string } | null
-  liveHomeGoals: number | null
-  liveAwayGoals: number | null
-  officialHomeGoals: number | null
-  officialAwayGoals: number | null
-  liveUpdatedAt: string | null
-  profiles: Profile[]
-}
 
 const PHASE_LABEL: Record<string, string> = {
   GROUPS: 'Grupos',
@@ -211,14 +178,9 @@ export default function EnVivoPage() {
   const params = useParams<{ quinielaId: string }>()
   const quinielaId = params.quinielaId
 
-  const { data, isLoading, dataUpdatedAt } = useQuery({
-    queryKey: ['live-predictions', quinielaId],
-    queryFn: async (): Promise<{ matches: LiveMatch[] }> => {
-      const res = await fetch(`/api/quinielas/${quinielaId}/live`)
-      return res.json()
-    },
-    refetchInterval: 15_000,
-  })
+  const { data, status, updatedAt } = useLivePredictions(quinielaId)
+  const isLoading = !data
+  const dataUpdatedAt = updatedAt
 
   const [filter, setFilter] = useState<LiveFilter>('all')
 
@@ -246,14 +208,44 @@ export default function EnVivoPage() {
               En Vivo
             </h1>
             <p className="text-sm text-gray-600">
-              Marcador en tiempo real vs predicción de cada perfil. Actualiza cada 15s.
+              Marcador en tiempo real vs predicción de cada perfil.
+              {status === 'live' && (
+                <span className="ml-1 text-emerald-700 font-semibold">
+                  Conectado en vivo · push instantáneo.
+                </span>
+              )}
+              {status === 'polling' && (
+                <span className="ml-1 text-blue-700 font-semibold">
+                  Actualiza cada 5s.
+                </span>
+              )}
+              {status === 'paused' && (
+                <span className="ml-1 text-gray-500">Pausado (pestaña inactiva).</span>
+              )}
             </p>
           </div>
-          {dataUpdatedAt > 0 && (
-            <p className="text-[10px] text-gray-400">
-              Actualizado: {new Date(dataUpdatedAt).toLocaleTimeString('es-CR')}
-            </p>
-          )}
+          <div className="flex items-center gap-2 text-[10px] text-gray-500">
+            {status === 'live' ? (
+              <span className="inline-flex items-center gap-1 text-emerald-700">
+                <Wifi size={12} className="animate-pulse" /> EN VIVO
+              </span>
+            ) : status === 'polling' ? (
+              <span className="inline-flex items-center gap-1 text-blue-700">
+                <Wifi size={12} /> Sondeo
+              </span>
+            ) : status === 'paused' ? (
+              <span className="inline-flex items-center gap-1 text-gray-400">
+                <WifiOff size={12} /> Pausado
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-amber-600">
+                <Wifi size={12} className="animate-pulse" /> Conectando…
+              </span>
+            )}
+            {dataUpdatedAt > 0 && (
+              <span>· {new Date(dataUpdatedAt).toLocaleTimeString('es-CR')}</span>
+            )}
+          </div>
         </div>
 
         {!isLoading && matches.length > 0 && (

@@ -148,7 +148,7 @@ function ScopedLeaderboard({ quinielaId, scope, scopeParams }: { quinielaId: str
   const { data, isLoading, error } = useQuery({
     queryKey: ['leaderboard', quinielaId, scope, scopeParams],
     queryFn: () => fetchLeaderboard(quinielaId, scope, scopeParams ?? {}),
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   })
   if (isLoading) return <BallLoader label="Cargando tabla…" />
   if (error) return <p className="text-sm text-red-600 py-4">Error al cargar posiciones.</p>
@@ -183,7 +183,7 @@ function DailyLeaderboard({ quinielaId, matches }: { quinielaId: string; matches
     queryKey: ['leaderboard-day', quinielaId, activeDay],
     queryFn: () => activeDay ? fetchLeaderboard(quinielaId, 'day', { date: activeDay }) : Promise.resolve([]),
     enabled: !!activeDay,
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   })
 
   const dayLabel = (() => {
