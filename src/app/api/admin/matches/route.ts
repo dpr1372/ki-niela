@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const eventId = searchParams.get('eventId')
 
-  const matches = await prisma.match.findMany({
+  const findArgs = {
     where: eventId ? { eventId } : {},
     include: {
       event: { select: { id: true, name: true } },
@@ -26,7 +26,21 @@ export async function GET(req: NextRequest) {
       matchday: { select: { name: true } },
     },
     orderBy: { kickoffAtUtc: 'asc' },
-  })
+  } as const
+
+  let matches: Awaited<ReturnType<typeof prisma.match.findMany<typeof findArgs>>>
+  try {
+    matches = await prisma.match.findMany(findArgs)
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: 'Error consultando partidos en BD.',
+        detail: String(e),
+        hint: 'Si aparece "column liveSource does not exist" o similar, ejecuta `prisma migrate deploy` en Railway.',
+      },
+      { status: 500 },
+    )
+  }
 
   return NextResponse.json(
     matches.map((m) => ({

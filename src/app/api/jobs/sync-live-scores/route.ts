@@ -34,14 +34,27 @@ export async function POST(req: NextRequest) {
   // The provider module decides which one is active.
 
   // Pick active matches with an external mapping that is NOT under manual override.
-  const candidates = await prisma.match.findMany({
-    where: {
-      externalId: { not: null },
-      manualOverride: false,
-      status: { in: ACTIVE_STATUSES as unknown as never },
-    },
-    select: { id: true, externalId: true, eventId: true },
-  })
+  let candidates: { id: string; externalId: string | null; eventId: string }[]
+  try {
+    candidates = await prisma.match.findMany({
+      where: {
+        externalId: { not: null },
+        manualOverride: false,
+        status: { in: ACTIVE_STATUSES as unknown as never },
+      },
+      select: { id: true, externalId: true, eventId: true },
+    })
+  } catch (e) {
+    console.error('[sync-live-scores] DB error', e)
+    return NextResponse.json(
+      {
+        error: 'DB query failed.',
+        detail: String(e),
+        hint: 'Run `prisma migrate deploy` to apply liveSource/externalId columns.',
+      },
+      { status: 500 },
+    )
+  }
 
   if (candidates.length === 0) {
     return NextResponse.json({ synced: 0, finalized: 0, skipped: 'no_active' })

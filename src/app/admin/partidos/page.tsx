@@ -179,10 +179,17 @@ export default function AdminPartidosPage() {
   async function loadMatches() {
     try {
       const res = await fetch('/api/admin/matches')
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const info = await res.json().catch(() => null)
+        toast.error(info?.error ?? `Error ${res.status} cargando partidos.`)
+        if (info?.hint) console.warn('[admin/partidos]', info.hint, info.detail)
+        setMatches([]) // unblock the UI from "Cargando…"
+        return
+      }
       setMatches(await res.json())
-    } catch {
-      toast.error('No se pudo cargar la lista de partidos.')
+    } catch (e) {
+      toast.error(`No se pudo cargar la lista de partidos: ${(e as Error).message}`)
+      setMatches([])
     }
   }
 

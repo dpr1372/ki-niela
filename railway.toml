@@ -1,5 +1,9 @@
 [build]
-buildCommand = "npm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
+# Apply pending Prisma migrations before next build, then copy static assets
+# into the standalone bundle. Without `prisma migrate deploy` here, schema
+# changes (e.g. new columns like liveSource, externalId) never reach the
+# production database and Prisma queries crash with PG errors.
+buildCommand = "prisma generate && prisma migrate deploy && next build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
 
 [deploy]
 startCommand = "HOSTNAME=0.0.0.0 node .next/standalone/server.js"
