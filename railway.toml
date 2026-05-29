@@ -2,7 +2,7 @@
 buildCommand = "npm run build"
 
 [deploy]
-startCommand = "node .next/standalone/server.js"
+startCommand = "PORT=${PORT:-3000} node .next/standalone/server.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "on_failure"
