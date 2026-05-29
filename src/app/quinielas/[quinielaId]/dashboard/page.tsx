@@ -11,6 +11,7 @@ import { Star, Trophy, BarChart2, Calendar, Users } from 'lucide-react'
 import { WorldCupHero } from '@/components/ui/WorldCupHero'
 import { formatCostaRica } from '@/lib/timezone'
 import { flagUrl } from '@/lib/flags'
+import { MyAutoPredictionsToggle } from '@/components/MyAutoPredictionsToggle'
 
 function FlagPill({ fifaCode, name }: { fifaCode?: string | null; name: string }) {
   const url = flagUrl(fifaCode)
@@ -152,6 +153,15 @@ export default async function DashboardPage({
             </Link>
           ))}
         </div>
+
+        {/* Mis predicciones automáticas */}
+        <MyAutoPredictionsToggle
+          quinielaId={quinielaId}
+          initialEnabled={member.autoPredictionsEnabled}
+          randomPredictionsEnabled={quiniela.randomPredictionsEnabled}
+          randomMinGoals={quiniela.randomMinGoals}
+          randomMaxGoals={quiniela.randomMaxGoals}
+        />
 
         {/* Upcoming matches */}
         {upcomingMatches.length > 0 && (
