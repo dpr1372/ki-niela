@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Image from 'next/image'
@@ -122,14 +122,11 @@ export default function PronosticosPage() {
   const params = useParams<{ quinielaId: string }>()
   const quinielaId = params.quinielaId
   const queryClient = useQueryClient()
-  const { save, flush, statusMap, inFlight } = useAutosave(
-    quinielaId,
-    () => {
-      // Refetch predictions after every successful save so other tabs/sessions
-      // and the React state stay aligned with what's actually in the DB.
-      queryClient.invalidateQueries({ queryKey: ['pronosticos', quinielaId] })
-    },
-  )
+  // Stable callback so useAutosave doesn't tear down on every render.
+  const onSaved = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['pronosticos', quinielaId] })
+  }, [queryClient, quinielaId])
+  const { save, flush, statusMap, inFlight } = useAutosave(quinielaId, onSaved)
   const stripRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading } = useQuery({
