@@ -88,6 +88,7 @@ export default function AdminUsuariosPage() {
     const newStatus: AdminQuiniela['status'] = enable ? 'ACTIVE' : 'ARCHIVED'
     const prevQuinielas = quinielas
     setQuinielas((curr) => curr?.map((x) => (x.id === q.id ? { ...x, status: newStatus } : x)) ?? null)
+    toast.success(enable ? `${q.name} habilitada.` : `${q.name} archivada.`)
 
     try {
       const res = await fetch(`/api/admin/quinielas/${q.id}`, {
@@ -101,7 +102,6 @@ export default function AdminUsuariosPage() {
         setQuinielas(prevQuinielas)
         return
       }
-      toast.success(enable ? `${q.name} habilitada.` : `${q.name} archivada.`)
     } catch {
       toast.error('Error de red.')
       setQuinielas(prevQuinielas)
@@ -109,10 +109,9 @@ export default function AdminUsuariosPage() {
   }
 
   async function patchUser(userId: string, body: Record<string, unknown>, successMsg: string) {
-    // Optimistic update: tweak the in-memory user immediately so the row
-    // reflects the new state and the toast is the only thing the eye is
-    // chasing. We DO NOT setLoading(true) here — that would replace the
-    // whole table with the BallLoader and the toast would feel delayed.
+    // Optimistic update + immediate toast. The fetch is fired in parallel
+    // and only matters for rollback if it fails. UX feels instant regardless
+    // of Railway/SMTP latency.
     const prevUsers = users
     setUsers((curr) =>
       curr?.map((u) => {
@@ -124,6 +123,7 @@ export default function AdminUsuariosPage() {
         return u
       }) ?? null,
     )
+    toast.success(successMsg)
 
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
@@ -138,7 +138,6 @@ export default function AdminUsuariosPage() {
         setUsers(prevUsers)
         return
       }
-      toast.success(successMsg)
       // Background refresh so the row picks up any server-side derived
       // fields (updatedAt, etc) without spinning a loader.
       void (async () => {

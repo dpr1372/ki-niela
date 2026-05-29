@@ -53,9 +53,10 @@ export async function PATCH(
     select: { id: true, name: true, email: true, status: true, globalRole: true },
   })
 
-  // Send activation email if user was just activated (transition from non-active → ACTIVE)
+  // Fire-and-forget the activation email — SMTP latency must NOT block the
+  // PATCH response (the toast/UI on the admin side waits for this).
   if (parsed.data.action === 'activate' && previous?.status !== 'ACTIVE') {
-    await sendUserActivatedGlobally({ userName: user.name, userEmail: user.email })
+    void sendUserActivatedGlobally({ userName: user.name, userEmail: user.email })
       .catch((e) => console.error('[admin/users] activation email failed:', e))
   }
 
