@@ -422,6 +422,20 @@ export default function AdminPartidosPage() {
     await loadMatches()
   }
 
+  async function forceStatus(matchId: string, status: 'PROGRAMADO' | 'BLOQUEADO' | 'EN_JUEGO' | 'FINALIZADO') {
+    const res = await fetch(`/api/admin/matches/${matchId}/force-status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    if (!res.ok) {
+      toast.error('Error al cambiar estado.')
+      return
+    }
+    toast.success(`Estado forzado: ${status}.`)
+    await loadMatches()
+  }
+
   async function clearAllLinks() {
     if (!confirm('¿Borrar TODOS los external IDs vinculados? Útil si cambiaste de proveedor (ej. Sofascore → ESPN). Tendrás que re-vincular cada partido.')) {
       return
@@ -633,7 +647,17 @@ export default function AdminPartidosPage() {
                           {m.homeName} <span className="text-gray-400">vs</span> {m.awayName}
                         </td>
                         <td className="px-3 py-2">
-                          <Badge variant="outline" className="text-[9px]">{m.status}</Badge>
+                          <select
+                            value={m.status}
+                            onChange={(e) => forceStatus(m.id, e.target.value as 'PROGRAMADO' | 'BLOQUEADO' | 'EN_JUEGO' | 'FINALIZADO')}
+                            className="text-[10px] font-bold uppercase border border-gray-300 rounded px-1 py-0.5 bg-white"
+                            title="Forzar estado (test)"
+                          >
+                            <option value="PROGRAMADO">PROGRAMADO</option>
+                            <option value="BLOQUEADO">BLOQUEADO</option>
+                            <option value="EN_JUEGO">EN_JUEGO</option>
+                            <option value="FINALIZADO">FINALIZADO</option>
+                          </select>
                         </td>
                         <td className="px-3 py-2 font-mono">
                           {live ? (
