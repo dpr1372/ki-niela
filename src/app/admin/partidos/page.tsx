@@ -306,6 +306,11 @@ export default function AdminPartidosPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState<string>('')
   const [syncing, setSyncing] = useState(false)
+  const [scoreEditId, setScoreEditId] = useState<string | null>(null)
+  const [scoreHome, setScoreHome] = useState<string>('')
+  const [scoreAway, setScoreAway] = useState<string>('')
+  const [scoreStatus, setScoreStatus] = useState<'EN_JUEGO' | 'MEDIO_TIEMPO' | 'TIEMPO_EXTRA' | 'PENALES' | 'FINALIZADO'>('EN_JUEGO')
+  const [scoreSaving, setScoreSaving] = useState(false)
 
   useEffect(() => {
     if (status === 'loading') return
@@ -375,6 +380,53 @@ export default function AdminPartidosPage() {
     setEditingId(null)
     setEditingValue('')
     await loadMatches()
+  }
+
+  function startScoreEdit(m: Match) {
+    setScoreEditId(m.id)
+    setScoreHome(m.liveHomeGoals?.toString() ?? '0')
+    setScoreAway(m.liveAwayGoals?.toString() ?? '0')
+    // Default a status that makes sense for live entry. If the match was
+    // PROGRAMADO/BLOQUEADO, jump to EN_JUEGO so the admin can start scoring.
+    const cur = m.status as string
+    if (cur === 'EN_JUEGO' || cur === 'MEDIO_TIEMPO' || cur === 'TIEMPO_EXTRA' || cur === 'PENALES' || cur === 'FINALIZADO') {
+      setScoreStatus(cur)
+    } else {
+      setScoreStatus('EN_JUEGO')
+    }
+  }
+
+  function cancelScoreEdit() {
+    setScoreEditId(null)
+    setScoreHome('')
+    setScoreAway('')
+  }
+
+  async function saveScore(matchId: string) {
+    const home = parseInt(scoreHome, 10)
+    const away = parseInt(scoreAway, 10)
+    if (Number.isNaN(home) || Number.isNaN(away) || home < 0 || away < 0) {
+      toast.error('Marcador inválido.')
+      return
+    }
+    setScoreSaving(true)
+    try {
+      const res = await fetch(`/api/matches/${matchId}/live`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ liveHomeGoals: home, liveAwayGoals: away, status: scoreStatus }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data?.error ?? 'No se pudo guardar el marcador.')
+        return
+      }
+      toast.success(data?.message ?? 'Marcador guardado.')
+      cancelScoreEdit()
+      await loadMatches()
+    } finally {
+      setScoreSaving(false)
+    }
   }
 
   async function toggleOverride(matchId: string, manualOverride: boolean) {
@@ -660,10 +712,69 @@ export default function AdminPartidosPage() {
                           </select>
                         </td>
                         <td className="px-3 py-2 font-mono">
-                          {live ? (
-                            <span className="text-emerald-700">{m.liveHomeGoals} - {m.liveAwayGoals}</span>
+                          {scoreEditId === m.id ? (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="w-12 h-7 text-center border border-gray-300 rounded text-sm"
+                                  value={scoreHome}
+                                  onChange={(e) => setScoreHome(e.target.value)}
+                                  autoFocus
+                                />
+                                <span className="text-gray-400">-</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="w-12 h-7 text-center border border-gray-300 rounded text-sm"
+                                  value={scoreAway}
+                                  onChange={(e) => setScoreAway(e.target.value)}
+                                />
+                              </div>
+                              <select
+                                value={scoreStatus}
+                                onChange={(e) => setScoreStatus(e.target.value as typeof scoreStatus)}
+                                className="text-[10px] font-bold uppercase border border-gray-300 rounded px-1 py-0.5 bg-white"
+                              >
+                                <option value="EN_JUEGO">EN_JUEGO</option>
+                                <option value="MEDIO_TIEMPO">MEDIO_TIEMPO</option>
+                                <option value="TIEMPO_EXTRA">TIEMPO_EXTRA</option>
+                                <option value="PENALES">PENALES</option>
+                                <option value="FINALIZADO">FINALIZADO</option>
+                              </select>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  className="h-6 text-xs px-2"
+                                  onClick={() => saveScore(m.id)}
+                                  disabled={scoreSaving}
+                                >
+                                  {scoreSaving ? '...' : '✓ Guardar'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-xs px-2"
+                                  onClick={cancelScoreEdit}
+                                >
+                                  ✕
+                                </Button>
+                              </div>
+                            </div>
                           ) : (
-                            <span className="text-gray-300">— —</span>
+                            <button
+                              onClick={() => startScoreEdit(m)}
+                              className="inline-flex items-center gap-2 hover:bg-gray-100 rounded px-2 py-1 transition"
+                              title="Editar marcador manualmente"
+                            >
+                              {live ? (
+                                <span className="text-emerald-700 font-semibold">{m.liveHomeGoals} - {m.liveAwayGoals}</span>
+                              ) : (
+                                <span className="text-gray-300">— —</span>
+                              )}
+                              <Pencil size={12} className="text-gray-400" />
+                            </button>
                           )}
                         </td>
                         <td className="px-3 py-2">
