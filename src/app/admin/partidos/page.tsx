@@ -156,8 +156,7 @@ export default function AdminPartidosPage() {
   const [matches, setMatches] = useState<Match[] | null>(null)
   const [eventFilter, setEventFilter] = useState<string>('all')
   const [searchDate, setSearchDate] = useState<string>('')
-  const [searchLeague, setSearchLeague] = useState<string>('')
-  const [searchSeason, setSearchSeason] = useState<string>('2026')
+  const [searchTournament, setSearchTournament] = useState<string>('')
   const [fixtures, setFixtures] = useState<Fixture[]>([])
   const [searching, setSearching] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -195,13 +194,12 @@ export default function AdminPartidosPage() {
     setSearching(true)
     try {
       const params = new URLSearchParams({ date: searchDate })
-      if (searchLeague) params.set('league', searchLeague)
-      if (searchSeason) params.set('season', searchSeason)
+      if (searchTournament) params.set('tournament', searchTournament)
       const res = await fetch(`/api/admin/external-fixtures?${params.toString()}`)
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error ?? 'Error consultando proveedor')
       setFixtures(json.fixtures ?? [])
-      toast.success(`${json.count} fixtures encontrados.`)
+      toast.success(`${json.count} fixtures encontrados (provider: ${json.provider}).`)
     } catch (e) {
       toast.error((e as Error).message)
       setFixtures([])
@@ -326,24 +324,22 @@ export default function AdminPartidosPage() {
         {/* ── Buscador de fixtures ──────────────────────────────────────── */}
         <div className="card-pitch rounded-xl p-5 space-y-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
-            <Search size={18} /> Buscar fixtures en API-Football
+            <Search size={18} /> Buscar fixtures (Sofascore — gratis, sin API key)
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-semibold text-gray-700 mb-1 block">Fecha</label>
               <Input type="date" value={searchDate} onChange={(e) => setSearchDate(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-700 mb-1 block">League ID</label>
+              <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                Filtro torneo (opcional)
+              </label>
               <Input
-                placeholder="10 = Friendlies, 1 = WC"
-                value={searchLeague}
-                onChange={(e) => setSearchLeague(e.target.value)}
+                placeholder='ej. "Friendly" o "World Cup"'
+                value={searchTournament}
+                onChange={(e) => setSearchTournament(e.target.value)}
               />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-700 mb-1 block">Season</label>
-              <Input value={searchSeason} onChange={(e) => setSearchSeason(e.target.value)} />
             </div>
             <div className="flex items-end">
               <Button onClick={searchFixtures} disabled={searching} className="w-full">
@@ -351,6 +347,10 @@ export default function AdminPartidosPage() {
               </Button>
             </div>
           </div>
+          <p className="text-[11px] text-gray-500 -mt-1">
+            Tip: deja el filtro vacío para ver TODOS los partidos del día (puede ser largo) o pon{' '}
+            <em>"Friendly"</em> para amistosos, <em>"World Cup"</em> para Mundial 2026.
+          </p>
 
           {fixtures.length > 0 && (
             <>
@@ -547,13 +547,23 @@ export default function AdminPartidosPage() {
           )}
         </div>
 
-        <div className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded-lg p-3 leading-relaxed">
-          <strong>Cómo usar:</strong> 1) Selecciona la fecha (p. ej. 2026-05-30) y la liga
-          (10 = Friendlies, 1 = World Cup) y dale Buscar. 2) Aparecen los fixtures encontrados.
-          3) Pulsa <em>"Auto-vincular partidos visibles por nombre"</em> y los partidos cuyos
-          equipos coincidan se vinculan solos. 4) Para los que no se mapearon, pulsa
-          <em> Vincular</em> en cada fila y pega el ID que viste arriba. 5) El switch <em>Auto/Manual</em>
-          decide si el cron toca ese partido o lo dejas para escribir el marcador a mano.
+        <div className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded-lg p-3 leading-relaxed space-y-1">
+          <p>
+            <strong>Cómo usar:</strong> 1) Selecciona la fecha (p. ej. 2026-05-30) y opcionalmente
+            un filtro de torneo (<em>"Friendly"</em>, <em>"World Cup"</em>) y dale Buscar.
+            2) Aparecen los fixtures encontrados. 3) Pulsa{' '}
+            <em>"Auto-vincular partidos visibles por nombre"</em> y los partidos cuyos
+            equipos coincidan se vinculan solos. 4) Para los que no se mapearon, pulsa
+            <em> Vincular</em> en cada fila y pega el ID que viste arriba. 5) El switch{' '}
+            <em>Auto/Manual</em> decide si el cron toca ese partido o lo dejas para escribir el
+            marcador a mano.
+          </p>
+          <p>
+            <strong>Cobertura:</strong> Sofascore tiene cobertura COMPLETA del Mundial 2026.
+            Para amistosos, depende de cuáles tengan registrados — los que no aparezcan, no
+            se sincronizan automáticamente, pero la quiniela funciona igual con marcador manual
+            o sin marcador (la predicción del jugador queda guardada de todos modos).
+          </p>
         </div>
       </div>
     </AppShell>

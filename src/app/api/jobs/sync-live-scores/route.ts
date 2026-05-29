@@ -18,7 +18,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { fetchFixtures, mapStatus } from '@/lib/live-providers/api-football'
+import { fetchFixtures, providerName } from '@/lib/live-providers'
+import { mapStatus as mapSofaStatus } from '@/lib/live-providers/sofascore'
 import { calculateScore } from '@/lib/scoring'
 
 const ACTIVE_STATUSES = ['BLOQUEADO', 'EN_JUEGO', 'MEDIO_TIEMPO', 'TIEMPO_EXTRA', 'PENALES'] as const
@@ -29,12 +30,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  if (!process.env.API_FOOTBALL_KEY) {
-    return NextResponse.json(
-      { skipped: true, reason: 'API_FOOTBALL_KEY not configured' },
-      { status: 200 },
-    )
-  }
+  // Sofascore (default) does not require any key. API-Football would.
+  // The provider module decides which one is active.
 
   // Pick active matches with an external mapping that is NOT under manual override.
   const candidates = await prisma.match.findMany({
@@ -68,7 +65,7 @@ export async function POST(req: NextRequest) {
     const fixture = fixturesById.get(match.externalId!)
     if (!fixture) continue
 
-    const newStatus = mapStatus(fixture.status)
+    const newStatus = mapSofaStatus(fixture.status)
     if (!newStatus) continue
     if (fixture.homeGoals === null || fixture.awayGoals === null) continue
 
@@ -151,7 +148,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ synced, finalized, candidates: candidates.length })
+  return NextResponse.json({ synced, finalized, candidates: candidates.length, provider: providerName })
 }
 
 // Allow GET for ad-hoc testing in browser (still needs secret query param)
