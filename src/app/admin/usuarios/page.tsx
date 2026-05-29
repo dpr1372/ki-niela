@@ -85,34 +85,70 @@ export default function AdminUsuariosPage() {
   }
 
   async function toggleQuinielaStatus(q: AdminQuiniela, enable: boolean) {
-    const newStatus = enable ? 'ACTIVE' : 'ARCHIVED'
-    const res = await fetch(`/api/admin/quinielas/${q.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    })
-    if (!res.ok) {
-      const info = await res.json().catch(() => null)
-      toast.error(info?.error ?? 'Error al actualizar quiniela.')
-      return
+    const newStatus: AdminQuiniela['status'] = enable ? 'ACTIVE' : 'ARCHIVED'
+    const prevQuinielas = quinielas
+    setQuinielas((curr) => curr?.map((x) => (x.id === q.id ? { ...x, status: newStatus } : x)) ?? null)
+
+    try {
+      const res = await fetch(`/api/admin/quinielas/${q.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) {
+        const info = await res.json().catch(() => null)
+        toast.error(info?.error ?? 'Error al actualizar quiniela.')
+        setQuinielas(prevQuinielas)
+        return
+      }
+      toast.success(enable ? `${q.name} habilitada.` : `${q.name} archivada.`)
+    } catch {
+      toast.error('Error de red.')
+      setQuinielas(prevQuinielas)
     }
-    toast.success(enable ? `${q.name} habilitada.` : `${q.name} archivada.`)
-    await loadQuinielas()
   }
 
   async function patchUser(userId: string, body: Record<string, unknown>, successMsg: string) {
-    const res = await fetch(`/api/admin/users/${userId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) {
-      const info = await res.json().catch(() => null)
-      toast.error(info?.error ?? 'Error al actualizar usuario.')
-      return
+    // Optimistic update: tweak the in-memory user immediately so the row
+    // reflects the new state and the toast is the only thing the eye is
+    // chasing. We DO NOT setLoading(true) here — that would replace the
+    // whole table with the BallLoader and the toast would feel delayed.
+    const prevUsers = users
+    setUsers((curr) =>
+      curr?.map((u) => {
+        if (u.id !== userId) return u
+        if (body.action === 'activate') return { ...u, status: 'ACTIVE' as const }
+        if (body.action === 'deactivate') return { ...u, status: 'INACTIVE' as const }
+        if (body.action === 'make_admin') return { ...u, globalRole: 'SUPER_ADMIN' as const }
+        if (body.action === 'remove_admin') return { ...u, globalRole: 'USER' as const }
+        return u
+      }) ?? null,
+    )
+
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const info = await res.json().catch(() => null)
+        toast.error(info?.error ?? 'Error al actualizar usuario.')
+        // Rollback to the snapshot taken before the optimistic mutation.
+        setUsers(prevUsers)
+        return
+      }
+      toast.success(successMsg)
+      // Background refresh so the row picks up any server-side derived
+      // fields (updatedAt, etc) without spinning a loader.
+      void (async () => {
+        const fresh = await fetch('/api/admin/users')
+        if (fresh.ok) setUsers(await fresh.json())
+      })()
+    } catch {
+      toast.error('Error de red.')
+      setUsers(prevUsers)
     }
-    toast.success(successMsg)
-    await loadUsers()
   }
 
   if (!session || session.user.globalRole !== 'SUPER_ADMIN') {
