@@ -58,94 +58,237 @@ function crDate(iso: string) {
   })
 }
 
-// Fuzzy team name matching (handles USA / United States, IVO/Ivory Coast etc.)
+// Fuzzy team name matching: accepts FIFA codes, English, Spanish (with/without
+// accents), and common shorthand. Two names match when their *equivalence
+// class* (a canonical English spelling) overlaps.
 function normalize(s: string): string {
   return s
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[̀-ͯ]/g, '') // strip combining accents
     .replace(/[^a-z0-9]/g, '')
 }
+
+// Equivalence groups — every entry on the same line is treated as the same team.
+// Add Spanish, English, FIFA-3, FIFA-2, common nicknames here.
+const TEAM_ALIASES: string[][] = [
+  // Americas
+  ['usa', 'unitedstates', 'unitedstatesofamerica', 'estadosunidos', 'eeuu'],
+  ['can', 'canada'],
+  ['mex', 'mexico', 'méxico'],
+  ['crc', 'costarica'],
+  ['hon', 'honduras'],
+  ['gua', 'guatemala'],
+  ['slv', 'elsalvador', 'salvador'],
+  ['nca', 'nicaragua'],
+  ['pan', 'panama', 'panamá'],
+  ['hai', 'haiti', 'haití'],
+  ['jam', 'jamaica'],
+  ['tri', 'trinidadandtobago', 'trinidadtobago', 'trinidadytobago'],
+  ['cub', 'cuba'],
+  ['dom', 'dominicanrepublic', 'republicadominicana'],
+  ['pur', 'puertorico'],
+  ['cuw', 'curacao', 'curaçao', 'curazao'],
+  ['arg', 'argentina'],
+  ['bra', 'brazil', 'brasil'],
+  ['uru', 'uruguay'],
+  ['par', 'paraguay'],
+  ['chi', 'chile'],
+  ['per', 'peru', 'perú'],
+  ['ecu', 'ecuador'],
+  ['bol', 'bolivia'],
+  ['ven', 'venezuela'],
+  ['col', 'colombia'],
+
+  // Europe
+  ['eng', 'england', 'inglaterra'],
+  ['sco', 'scotland', 'escocia'],
+  ['wal', 'wales', 'gales'],
+  ['nir', 'northernireland', 'irlandadelnorte'],
+  ['irl', 'ireland', 'irlanda', 'republicofireland'],
+  ['fra', 'france', 'francia'],
+  ['esp', 'spain', 'españa', 'espana'],
+  ['ita', 'italy', 'italia'],
+  ['por', 'portugal'],
+  ['ger', 'germany', 'alemania'],
+  ['ned', 'netherlands', 'holland', 'holanda', 'paisesbajos'],
+  ['bel', 'belgium', 'belgica', 'bélgica'],
+  ['lux', 'luxembourg', 'luxemburgo'],
+  ['sui', 'switzerland', 'suiza'],
+  ['aut', 'austria'],
+  ['den', 'denmark', 'dinamarca'],
+  ['swe', 'sweden', 'suecia'],
+  ['nor', 'norway', 'noruega'],
+  ['fin', 'finland', 'finlandia'],
+  ['isl', 'iceland', 'islandia'],
+  ['pol', 'poland', 'polonia'],
+  ['cze', 'czechrepublic', 'czechia', 'republicacheca'],
+  ['svk', 'slovakia', 'eslovaquia'],
+  ['hun', 'hungary', 'hungria', 'hungría'],
+  ['rou', 'romania', 'rumania', 'rumanía'],
+  ['bul', 'bulgaria'],
+  ['srb', 'serbia'],
+  ['cro', 'croatia', 'croacia'],
+  ['slo', 'slovenia', 'eslovenia'],
+  ['bih', 'bosniaandherzegovina', 'bosnia', 'bosniaherzegovina'],
+  ['mkd', 'northmacedonia', 'macedonia', 'macedoniadelnorte'],
+  ['mne', 'montenegro'],
+  ['kos', 'kosovo'],
+  ['alb', 'albania'],
+  ['gre', 'greece', 'grecia'],
+  ['tur', 'turkey', 'turquia', 'turquía'],
+  ['rus', 'russia', 'rusia'],
+  ['ukr', 'ukraine', 'ucrania'],
+  ['blr', 'belarus', 'bielorrusia'],
+  ['mda', 'moldova', 'moldavia'],
+  ['est', 'estonia'],
+  ['lat', 'latvia', 'letonia'],
+  ['ltu', 'lithuania', 'lituania'],
+  ['geo', 'georgia'],
+  ['arm', 'armenia'],
+  ['aze', 'azerbaijan', 'azerbaiyán', 'azerbaiyan'],
+  ['mlt', 'malta'],
+  ['cyp', 'cyprus', 'chipre'],
+  ['gib', 'gibraltar'],
+  ['far', 'faroeislands', 'islasferoe'],
+  ['lie', 'liechtenstein'],
+  ['and', 'andorra'],
+  ['smr', 'sanmarino'],
+
+  // Asia / Oceania
+  ['jpn', 'japan', 'japón', 'japon'],
+  ['kor', 'southkorea', 'korearepublic', 'coreadelsur', 'corea'],
+  ['prk', 'northkorea', 'coreadelnorte'],
+  ['chn', 'china', 'chinapr'],
+  ['hkg', 'hongkong'],
+  ['twn', 'taiwan', 'chinesetaipei'],
+  ['ind', 'india'],
+  ['idn', 'indonesia'],
+  ['mas', 'malaysia', 'malasia'],
+  ['sgp', 'singapore', 'singapur'],
+  ['tha', 'thailand', 'tailandia'],
+  ['vie', 'vietnam'],
+  ['phi', 'philippines', 'filipinas'],
+  ['mng', 'mongolia'],
+  ['kgz', 'kyrgyzstan', 'kirguistan', 'kirguistán'],
+  ['kaz', 'kazakhstan', 'kazajistan', 'kazajistán'],
+  ['uzb', 'uzbekistan', 'uzbekistán'],
+  ['tjk', 'tajikistan', 'tayikistán'],
+  ['tkm', 'turkmenistan', 'turkmenistán'],
+  ['afg', 'afghanistan', 'afganistan', 'afganistán'],
+  ['pak', 'pakistan', 'pakistán'],
+  ['ban', 'bangladesh'],
+  ['sri', 'srilanka'],
+  ['npl', 'nepal'],
+  ['mdv', 'maldives', 'maldivas'],
+  ['irn', 'iran', 'irán'],
+  ['irq', 'iraq', 'irak'],
+  ['syr', 'syria', 'siria'],
+  ['lbn', 'lebanon', 'libano', 'líbano'],
+  ['jor', 'jordan', 'jordania'],
+  ['isr', 'israel'],
+  ['pse', 'palestine', 'palestina'],
+  ['ksa', 'saudiarabia', 'arabiasaudita', 'arabiasaudi'],
+  ['qat', 'qatar'],
+  ['bhr', 'bahrain', 'bahréin', 'bahrein'],
+  ['kuw', 'kuwait'],
+  ['omn', 'oman', 'omán'],
+  ['yem', 'yemen'],
+  ['uae', 'unitedarabemirates', 'emiratosarabesunidos', 'emiratos'],
+  ['aus', 'australia'],
+  ['nzl', 'newzealand', 'nuevazelanda', 'nuevazelandia'],
+  ['fij', 'fiji'],
+  ['png', 'papuanewguinea', 'papuanuevaguinea'],
+  ['sol', 'solomonislands'],
+  ['vut', 'vanuatu'],
+
+  // Africa
+  ['mar', 'morocco', 'marruecos'],
+  ['alg', 'algeria', 'argelia'],
+  ['tun', 'tunisia', 'tunez', 'túnez'],
+  ['egy', 'egypt', 'egipto'],
+  ['lib', 'libya', 'libia'],
+  ['sen', 'senegal'],
+  ['mli', 'mali'],
+  ['gha', 'ghana'],
+  ['nga', 'nigeria'],
+  ['cmr', 'cameroon', 'camerun', 'camerún'],
+  ['civ', 'ivorycoast', 'cotedivoire', 'côtedivoire', 'costademarfil'],
+  ['gnb', 'guineabissau'],
+  ['gui', 'guinea'],
+  ['eqg', 'equatorialguinea', 'guineaecuatorial'],
+  ['gab', 'gabon', 'gabón'],
+  ['cgo', 'congo', 'congorepublic'],
+  ['cod', 'drcongo', 'democraticrepublicofthecongo', 'rdcongo'],
+  ['ang', 'angola'],
+  ['nam', 'namibia'],
+  ['rsa', 'southafrica', 'sudafrica', 'sudáfrica'],
+  ['bot', 'botswana', 'botsuana'],
+  ['zim', 'zimbabwe'],
+  ['zam', 'zambia'],
+  ['mwi', 'malawi'],
+  ['moz', 'mozambique'],
+  ['mri', 'mauritius', 'mauricio'],
+  ['mad', 'madagascar'],
+  ['com', 'comoros', 'comoras'],
+  ['ken', 'kenya'],
+  ['uga', 'uganda'],
+  ['tan', 'tanzania'],
+  ['rwa', 'rwanda', 'ruanda'],
+  ['bdi', 'burundi'],
+  ['eth', 'ethiopia', 'etiopia', 'etiopía'],
+  ['eri', 'eritrea'],
+  ['sud', 'sudan', 'sudán'],
+  ['ssd', 'southsudan', 'sudandelsur', 'sudándelsur'],
+  ['som', 'somalia'],
+  ['djb', 'djibouti', 'yibuti'],
+  ['cha', 'chad'],
+  ['bfa', 'burkinafaso'],
+  ['nig', 'niger', 'níger'],
+  ['cpv', 'capeverde', 'caboverde'],
+  ['gam', 'gambia'],
+  ['lbr', 'liberia'],
+  ['sle', 'sierraleone', 'sierraleona'],
+  ['tog', 'togo'],
+  ['ben', 'benin', 'benín'],
+  ['cta', 'centralafricanrepublic', 'republicacentroafricana'],
+  ['stp', 'saotomeprincipe'],
+]
+
+// Build a quick lookup: any normalized name → its canonical alias group index.
+const ALIAS_GROUP_INDEX = (() => {
+  const m = new Map<string, number>()
+  TEAM_ALIASES.forEach((group, i) => {
+    for (const variant of group) {
+      m.set(normalize(variant), i)
+    }
+  })
+  return m
+})()
 
 function teamsMatch(a: string, b: string): boolean {
   const na = normalize(a)
   const nb = normalize(b)
+  if (!na || !nb) return false
   if (na === nb) return true
-  if (na.includes(nb) || nb.includes(na)) return true
-  // Common abbreviations
-  const map: Record<string, string[]> = {
-    usa: ['unitedstates', 'unitedstatesofamerica'],
-    uk: ['unitedkingdom', 'greatbritain'],
-    rsa: ['southafrica'],
-    ned: ['netherlands', 'holland'],
-    ger: ['germany'],
-    den: ['denmark'],
-    swe: ['sweden'],
-    nor: ['norway'],
-    civ: ['ivorycoast', 'cotedivoire'],
-    crc: ['costarica'],
-    mex: ['mexico'],
-    can: ['canada'],
-    arg: ['argentina'],
-    bra: ['brazil'],
-    par: ['paraguay'],
-    uru: ['uruguay'],
-    chi: ['chile'],
-    per: ['peru'],
-    ecu: ['ecuador'],
-    bol: ['bolivia'],
-    ven: ['venezuela'],
-    col: ['colombia'],
-    fra: ['france'],
-    esp: ['spain'],
-    ita: ['italy'],
-    por: ['portugal'],
-    eng: ['england'],
-    sco: ['scotland'],
-    irl: ['ireland'],
-    bel: ['belgium'],
-    swi: ['switzerland'],
-    aut: ['austria'],
-    pol: ['poland'],
-    cro: ['croatia'],
-    ser: ['serbia'],
-    rou: ['romania'],
-    tur: ['turkey'],
-    gre: ['greece'],
-    rus: ['russia'],
-    ukr: ['ukraine'],
-    jpn: ['japan'],
-    kor: ['southkorea', 'korearepublic'],
-    aus: ['australia'],
-    nzl: ['newzealand'],
-    sen: ['senegal'],
-    nga: ['nigeria'],
-    egy: ['egypt'],
-    mar: ['morocco'],
-    alg: ['algeria'],
-    tun: ['tunisia'],
-    cmr: ['cameroon'],
-    gha: ['ghana'],
-    ken: ['kenya'],
-    isr: ['israel'],
-    irn: ['iran'],
-    ksa: ['saudiarabia'],
-    qat: ['qatar'],
-    uae: ['unitedarabemirates'],
-    ind: ['india'],
-    chn: ['china', 'chinapr'],
-    pak: ['pakistan'],
-    sgp: ['singapore'],
-    phi: ['philippines'],
-    tha: ['thailand'],
-    vie: ['vietnam'],
-    idn: ['indonesia'],
-    mas: ['malaysia'],
-  }
-  for (const [code, aliases] of Object.entries(map)) {
-    if ((na === code && aliases.some((x) => nb.includes(x))) || (nb === code && aliases.some((x) => na.includes(x)))) {
-      return true
-    }
+  // substring containment (for 'mexico' vs 'mexicofootballteam')
+  if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return true
+
+  // Alias group equivalence (Brazil/Brasil, Sudáfrica/SouthAfrica, etc.)
+  const ga = ALIAS_GROUP_INDEX.get(na)
+  const gb = ALIAS_GROUP_INDEX.get(nb)
+  if (ga !== undefined && gb !== undefined && ga === gb) return true
+
+  // Try once more after stripping common suffixes ("national team", "national")
+  const stripped = (s: string) =>
+    s.replace(/nationalfootballteam$/, '').replace(/nationalteam$/, '').replace(/national$/, '').replace(/team$/, '')
+  const sa = stripped(na)
+  const sb = stripped(nb)
+  if (sa && sb) {
+    if (sa === sb) return true
+    const sga = ALIAS_GROUP_INDEX.get(sa)
+    const sgb = ALIAS_GROUP_INDEX.get(sb)
+    if (sga !== undefined && sgb !== undefined && sga === sgb) return true
   }
   return false
 }
