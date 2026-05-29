@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { BallLoader } from '@/components/ui/BallLoader'
-import { Search, Link2, Unlink, Zap, UserCog, RefreshCw, CheckCircle2, Trash2 } from 'lucide-react'
+import { Search, Link2, Unlink, Zap, UserCog, RefreshCw, CheckCircle2, Trash2, Pencil } from 'lucide-react'
 
 type Match = {
   id: string
@@ -499,10 +499,10 @@ export default function AdminPartidosPage() {
         <div>
           <h1 className="text-3xl font-black text-pitch-dark flex items-center gap-2">
             <Link2 className="text-emerald-700" size={28} />
-            Vinculación de Partidos (API-Football)
+            Vinculación de Partidos (ESPN)
           </h1>
           <p className="text-sm text-gray-600 mt-1">
-            Asigna a cada partido su <strong>fixture id</strong> de API-Football para que los
+            Asigna a cada partido su <strong>event id</strong> de ESPN para que los
             marcadores se sincronicen automáticamente cada minuto durante el juego.
           </p>
         </div>
@@ -510,7 +510,7 @@ export default function AdminPartidosPage() {
         {/* ── Buscador de fixtures ──────────────────────────────────────── */}
         <div className="card-pitch rounded-xl p-5 space-y-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
-            <Search size={18} /> Buscar fixtures (Sofascore — gratis, sin API key)
+            <Search size={18} /> Buscar fixtures (ESPN — gratis, sin API key)
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
@@ -631,7 +631,7 @@ export default function AdminPartidosPage() {
                     <th className="text-left px-3 py-2">Partido</th>
                     <th className="text-left px-3 py-2">Estado</th>
                     <th className="text-left px-3 py-2">Marcador</th>
-                    <th className="text-left px-3 py-2">External ID</th>
+                    <th className="text-left px-3 py-2 min-w-[230px]">External ID</th>
                     <th className="text-left px-3 py-2">Modo</th>
                   </tr>
                 </thead>
@@ -693,31 +693,35 @@ export default function AdminPartidosPage() {
                               </Button>
                             </div>
                           ) : linked ? (
-                            <div className="flex items-center gap-1">
-                              <span
-                                className="font-mono text-blue-700 max-w-[140px] truncate"
-                                title={m.externalId ?? ''}
-                              >
-                                {m.externalId}
-                              </span>
-                              {m.externalProvider && (
-                                <span className="text-[9px] text-gray-400 font-bold uppercase">
-                                  {m.externalProvider.replace('api-football', 'AF').slice(0, 6)}
+                            <div className="flex items-center gap-2 min-w-[200px]">
+                              <div className="flex flex-col leading-tight min-w-0 flex-1">
+                                <span
+                                  className="font-mono text-[11px] text-blue-700 truncate"
+                                  title={m.externalId ?? ''}
+                                >
+                                  {m.externalId}
                                 </span>
-                              )}
+                                {m.externalProvider && (
+                                  <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">
+                                    {m.externalProvider}
+                                  </span>
+                                )}
+                              </div>
                               <button
                                 onClick={() => { setEditingId(m.id); setEditingValue(m.externalId ?? '') }}
-                                className="text-[10px] text-gray-500 hover:text-blue-700"
-                                title="Editar"
+                                className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-600 hover:text-blue-700 hover:bg-blue-50 border border-gray-200"
+                                title="Editar external ID"
+                                aria-label="Editar"
                               >
-                                ✎
+                                <Pencil size={13} />
                               </button>
                               <button
                                 onClick={() => linkMatch(m.id, null)}
-                                className="text-red-500 hover:text-red-700"
-                                title="Desvincular"
+                                className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-red-600 hover:text-white hover:bg-red-500 border border-red-200"
+                                title="Desvincular partido"
+                                aria-label="Desvincular"
                               >
-                                <Unlink size={11} />
+                                <Unlink size={13} />
                               </button>
                             </div>
                           ) : (
@@ -774,7 +778,7 @@ export default function AdminPartidosPage() {
             marcador a mano.
           </p>
           <p>
-            <strong>Cobertura:</strong> Sofascore tiene cobertura COMPLETA del Mundial 2026.
+            <strong>Cobertura:</strong> ESPN tiene cobertura COMPLETA del Mundial 2026.
             Para amistosos, depende de cuáles tengan registrados — los que no aparezcan, no
             se sincronizan automáticamente, pero la quiniela funciona igual con marcador manual
             o sin marcador (la predicción del jugador queda guardada de todos modos).
