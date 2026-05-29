@@ -175,6 +175,24 @@ export default function PronosticosPage() {
     stripRef.current?.scrollBy({ left: dir * 240, behavior: 'smooth' })
   }
 
+  // ── Hooks must run in the same order every render — keep them ABOVE any
+  // early return. (Otherwise React throws 'Rendered more hooks than during
+  // the previous render' and the page crashes.)
+  //
+  // Show overlay while a save is in-flight or while a debounced save is queued.
+  // We delay the overlay 300ms so that fast saves (~debounce + ~ms latency)
+  // don't flash a blocking screen for every keystroke.
+  const isPending = inFlight > 0 || Object.values(statusMap).some((s) => s === 'saving')
+  const [showSavingOverlay, setShowSavingOverlay] = useState(false)
+  useEffect(() => {
+    if (!isPending) {
+      setShowSavingOverlay(false)
+      return
+    }
+    const t = setTimeout(() => setShowSavingOverlay(true), 300)
+    return () => clearTimeout(t)
+  }, [isPending])
+
   if (isLoading) {
     return (
       <AppShell quinielaId={quinielaId}>
@@ -190,23 +208,6 @@ export default function PronosticosPage() {
     const dt = new Date(Date.UTC(y, m - 1, d))
     return `${WEEKDAY_FULL_ES[dt.getUTCDay()]}, ${d} de ${MONTH_FULL_ES[m - 1]}`
   })()
-
-  // Show overlay while a save is in-flight or while a debounced save is queued.
-  // This both signals progress and prevents the user from switching pages
-  // before the request lands.
-  //
-  // We delay the overlay 300ms so that fast saves (~debounce + ~ms latency)
-  // don't flash a blocking screen for every keystroke.
-  const isPending = inFlight > 0 || Object.values(statusMap).some((s) => s === 'saving')
-  const [showSavingOverlay, setShowSavingOverlay] = useState(false)
-  useEffect(() => {
-    if (!isPending) {
-      setShowSavingOverlay(false)
-      return
-    }
-    const t = setTimeout(() => setShowSavingOverlay(true), 300)
-    return () => clearTimeout(t)
-  }, [isPending])
 
   return (
     <AppShell quinielaId={quinielaId}>
