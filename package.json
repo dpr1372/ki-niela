@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "build:railway": "prisma generate && prisma migrate deploy && tsx prisma/seed.ts && next build",
     "db:seed": "tsx prisma/seed.ts",
