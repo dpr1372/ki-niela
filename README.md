@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ki-Niela
 
-## Getting Started
+Plataforma web (Next.js + PostgreSQL) para quinielas deportivas **recreativas** — sin dinero real, sin apuestas, sin pagos. Solo competencia por puntos.
 
-First, run the development server:
+> Producción: <https://ki-niela-production.up.railway.app>
+
+## Características
+
+- **Multi-evento / multi-quiniela** — un usuario puede participar en varias quinielas del mismo o de distintos eventos.
+- **Pronósticos por partido** con autosave (debounce 350 ms, beacon en navegación), bloqueo individual 10 min antes del kickoff.
+- **Bot de pronósticos aleatorios** con doble compuerta: el admin lo activa por quiniela y cada participante lo activa para sí mismo.
+- **Cálculo automático de puntos** (3/1/0 normal, 5/3/0 estrella; en eliminatorias cuenta el marcador a 90' o 120', no penales).
+- **Marcadores en vivo** desde ESPN (sin API key) vía cron cada minuto, con override manual por partido.
+- **Posiciones** general / por día / por jornada / por fase, con SUPER_ADMIN excluido del ranking.
+- **Emails transaccionales** vía Brevo HTTP API (compatible con Railway, que bloquea SMTP outbound).
+- **Mobile-first**, responsive, instalable como PWA.
+
+## Stack
+
+| Capa | Tecnología |
+|------|------------|
+| Frontend | Next.js 16.2.6 (App Router), React 19.2, Tailwind 4, React Query 5, React Hook Form, Zod 4, Sonner, lucide-react |
+| Backend | Next.js API Routes, NextAuth 5 (credentials), Prisma 7.8 |
+| Auth/passwords | bcryptjs (cost 12) |
+| Email | Brevo HTTP API (preferido) · Nodemailer SMTP (fallback) |
+| Live scores | ESPN site.api.espn.com (gratis, sin key) |
+| BD | PostgreSQL 12+ |
+| Deploy | Railway (Docker, Next standalone) |
+| Tests | Vitest + Testing Library |
+
+Ver `GUIA_COMPLETA.md` para el detalle de arquitectura y `IMPLEMENTACION.md` para el changelog funcional.
+
+## Setup local
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# 1. Dependencias
+npm install
+
+# 2. Variables de entorno: copia .env.example → .env.local y completa
+#    DATABASE_URL, NEXTAUTH_SECRET, BREVO_API_KEY (opcional), etc.
+cp .env.example .env.local
+
+# 3. Base de datos
+createdb bd_kiniela
+npx prisma migrate dev
+npx prisma db seed
+
+# 4. Dev server
+npm run dev   # http://localhost:3001
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Variables mínimas en `.env.local`:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+DATABASE_URL="postgresql://postgres:<pass>@localhost:5432/bd_kiniela?schema=public"
+NEXTAUTH_URL="http://localhost:3001"
+NEXTAUTH_SECRET="<cualquier string largo>"
+CRON_SECRET="<cualquier string largo>"
+# Email (opcional en local — sin estas vars, sendMail loguea y devuelve ok:false)
+BREVO_API_KEY="xkeysib-..."
+SMTP_FROM="Ki-Niela <noreply@tu-dominio>"
+ADMIN_NOTIFY_EMAIL="tu-correo@example.com"
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Comandos útiles
 
-## Learn More
+```bash
+npm run dev              # dev server
+npm run build            # build local (next build + prisma generate)
+npm run build:railway    # build con migrate deploy + seed (lo usa Railway)
+npm test                 # vitest run
+npm run test:watch       # vitest watch
 
-To learn more about Next.js, take a look at the following resources:
+# Datos
+npx prisma studio                          # GUI de BD
+npx prisma migrate dev --name "<nombre>"   # nueva migración
+npx tsx scripts/seed-amistosos.ts          # crear quiniela amistosos
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Push a `main` ⇒ Railway redeploya. El job `prisma migrate deploy` corre en build, así que las migraciones se aplican antes del start.
 
-## Deploy on Vercel
+Cron jobs (cron-job.org o Railway cron) deben llamar cada minuto:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `POST /api/jobs/sync-live-scores` — sincroniza marcadores ESPN
+- `POST /api/jobs/lock-matches` — bloquea partidos a `kickoff - lockMinutesBeforeMatch`
+- `POST /api/jobs/generate-random-predictions` — bot aleatorio
+- `POST /api/jobs/recalculate-scores` — recalcula puntos cuando hay resultado oficial
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Header obligatorio: `x-cron-secret: <CRON_SECRET>`.
+
+## Documentación
+
+- [`GUIA_COMPLETA.md`](GUIA_COMPLETA.md) — arquitectura, modelo de datos, endpoints, lógica de negocio, deploy.
+- [`IMPLEMENTACION.md`](IMPLEMENTACION.md) — changelog narrativo de features importantes.
+- [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md) — integración ESPN, vinculación de partidos, cron.
+- [`AGENTS.md`](AGENTS.md) — notas para agentes/IA: leer la doc de Next.js antes de tocar código.
+
+## Reglas de puntuación
+
+| Resultado | General | Estrella / Final |
+|-----------|---------|------------------|
+| Marcador exacto | 3 | 5 |
+| Ganador correcto, marcador no | 1 | 3 |
+| Empate correcto, marcador no | 1 | 3 |
+| Sin acierto | 0 | 0 |
+
+En eliminatorias cuenta el marcador a 90' (o 120' si hubo extra-time). Penales **no** cuentan.
+
+## Licencia
+
+Privado. Sin licencia pública.

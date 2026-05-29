@@ -1,7 +1,7 @@
 # 🏆 Ki-Niela: Guía Completa para Desarrolladores
 
-**Versión:** 1.0  
-**Última actualización:** 2026-05-29  
+**Versión:** 1.1
+**Última actualización:** 2026-05-29
 **Audiencia:** Programadores de cualquier nivel (junior → senior)
 
 ---
@@ -81,8 +81,10 @@ Una plataforma web de **quinielas deportivas recreativas** (sin dinero real, sol
 ### Infraestructura
 | Servicio | Propósito |
 |----------|----------|
-| **Railway** | Hosting en producción |
-| **Resend** | Envío de emails SMTP |
+| **Railway** | Hosting en producción (Docker, Next standalone) |
+| **Brevo HTTP API** | Envío de emails (HTTPS:443, único transport que pasa el bloqueo de SMTP outbound de Railway) |
+| **ESPN site.api.espn.com** | Proveedor gratis de marcadores en vivo (sin API key) |
+| **cron-job.org** | Disparador de jobs cada minuto (sync, lock, bot, recalc) |
 | **Next.js Standalone** | Output mode para Railway |
 
 ### Testing & Development
@@ -138,33 +140,36 @@ app_KI-Niela/
 │   ├── lib/
 │   │   ├── prisma.ts                     # Conexión Prisma
 │   │   ├── auth.ts                       # NextAuth config
-│   │   ├── mailer.ts                     # Sistema de emails
-│   │   ├── mailer-templates.ts           # Plantillas HTML
-│   │   ├── scoring.ts                    # Cálculo de puntos
-│   │   ├── timezone.ts                   # Manejo de zonas horarias
-│   │   ├── lock.ts                       # Lógica de bloqueo
-│   │   ├── flags.ts                      # Mapping banderas
-│   │   ├── quiniela-auth.ts              # Autorización por quiniela
-│   │   └── utils.ts                      # Utilidades
+│   │   ├── mailer.ts                     # sendMail() con dual transport (Brevo HTTP / SMTP)
+│   │   ├── mailer-templates.ts           # Plantillas HTML transaccionales
+│   │   ├── scoring.ts                    # Cálculo de puntos (3/1/0 normal, 5/3/0 estrella)
+│   │   ├── timezone.ts                   # Manejo de zonas horarias America/Costa_Rica
+│   │   ├── lock.ts                       # isMatchLocked(kickoff, lockMinutes)
+│   │   ├── flags.ts                      # Mapping FIFA-3 → ISO-2 banderas
+│   │   ├── quiniela-auth.ts              # getMemberContext / checkQuinielaAuth
+│   │   ├── live-providers/               # Sources de marcadores en vivo
+│   │   │   ├── espn.ts                   # Proveedor activo (sin API key)
+│   │   │   └── api-football.ts           # Alternativa de pago
+│   │   └── utils.ts                      # cn() y otras utilidades
 │   ├── hooks/
-│   │   ├── useAutosave.ts                # Hook para autosave
-│   │   └── ... (custom hooks)
+│   │   ├── useAutosave.ts                # Debounce 350ms + sendBeacon en navigation
+│   │   └── useLiveScore.ts               # SSE + polling fallback
 │   ├── types/
 │   │   └── next-auth.d.ts                # Tipos NextAuth
 │   ├── providers/
 │   │   └── QueryProvider.tsx             # React Query provider
 │   ├── __tests__/                        # Tests unitarios
-│   │   ├── scoring.test.ts
-│   │   ├── timezone.test.ts
-│   │   └── bot-gate.test.ts
-│   └── proxy.ts                          # Proxy para desarrollo
+│   │   ├── scoring.test.ts               # Reglas 3/1/0 + estrella + eliminatorias
+│   │   ├── timezone.test.ts              # Conversión UTC ↔ Costa_Rica
+│   │   ├── bot-gate.test.ts              # Doble compuerta del bot
+│   │   └── espn.test.ts                  # mapStatus + parseEvent
+│   └── proxy.ts                          # Middleware /api/jobs y /api/health
 ├── prisma/
 │   ├── schema.prisma                     # Schema BD
 │   ├── migrations/                       # Migration history
 │   └── seed.ts                           # Script de datos iniciales
 ├── scripts/
-│   ├── seed-amistosos.ts                 # Crear quiniela amistosos
-│   └── test-smtp.ts                      # Test de emails
+│   └── seed-amistosos.ts                 # Crear quiniela amistosos (idempotente)
 ├── public/                               # Assets estáticos
 ├── package.json                          # Dependencias
 ├── tsconfig.json                         # TypeScript config
@@ -666,7 +671,7 @@ Tabs por jornada/fase. Para cada partido muestra:
 - Inputs: "Goles local" + "Goles visitante"
 - Ícono estrella (si aplica)
 - Estado: "Guardando...", "Guardado", "Bloqueado"
-- **Autosave:** Se guarda automáticamente con debounce 500ms
+- **Autosave:** Debounce 350 ms + `onBlur` flush + `sendBeacon` en navegación. Overlay full-screen con balón animado mientras guarda (delay 300 ms para no flashear)
 
 **Archivo:** `src/app/quinielas/[id]/pronosticos/page.tsx`
 
@@ -791,12 +796,19 @@ Componentes base importados de `shadcn`:
 │   ├── login              POST   Login (NextAuth)
 │   └── logout             POST   Logout (NextAuth)
 ├── me                     GET    Perfil del usuario logueado
-│                          PATCH  Actualizar perfil
+│                          PATCH  Actualizar perfil (name/email/password)
 ├── admin/
 │   ├── users              GET    Listar todos los usuarios
-│   ├── users/:id          PATCH  Activar/desactivar usuario
+│   ├── users/:id          PATCH  Activar/desactivar usuario / cambiar rol
 │   ├── quinielas          GET    Listar todas las quinielas
-│   └── quinielas/:id      PATCH  Cambiar status de quiniela
+│   ├── quinielas/:id      PATCH  Cambiar status (ACTIVE/CLOSED/ARCHIVED)
+│   ├── matches/:id/external          PATCH  Vincular/desvincular external ID
+│   ├── matches/clear-external        POST   Limpiar TODOS los external IDs
+│   ├── matches/:id/force-status      PATCH  Forzar status (testing E2E)
+│   ├── external-fixtures  GET    Buscar fixtures en proveedor (ESPN)
+│   ├── sync-now           POST   Disparar sync de live scores manualmente
+│   └── diag/mailer        GET    Snapshot de config mailer
+│                          POST   Enviar email de prueba
 ├── events                 GET    Listar eventos
 │                          POST   Crear evento (super admin)
 ├── events/:id             GET    Detalle de evento
@@ -807,26 +819,34 @@ Componentes base importados de `shadcn`:
 │                          PATCH  Actualizar config
 ├── quinielas/:id/members  GET    Listar participantes
 │                          POST   Agregar participante
-├── quinielas/:id/members/request-access  
+├── quinielas/:id/members/request-access
 │                          POST   Solicitar acceso con código
-├── quinielas/:id/members/:memberId   
+├── quinielas/:id/members/:memberId
 │                          PATCH  Activar/desactivar participante
-├── quinielas/:id/predictions  
+├── quinielas/:id/me/auto-predictions
+│                          PATCH  Toggle del bot personal del usuario
+├── quinielas/:id/predictions
 │                          GET    Predicciones del usuario
 │                          POST   Crear/actualizar predicción (UPSERT)
-├── quinielas/:id/leaderboard  
-│                          GET    Tabla de posiciones
+├── quinielas/:id/leaderboard
+│                          GET    Tabla de posiciones (?scope=general|day|matchday|phase)
 ├── quinielas/:id/stats    GET    Estadísticas generales
-├── quinielas/:id/matrix   GET    Matriz de pronósticos
+├── quinielas/:id/prediction-matrix
+│                          GET    Matriz de pronósticos
+├── quinielas/:id/live     GET    SSE de marcadores en vivo
+├── quinielas/:id/star-matches
+│                          GET    Partidos estrella + PATCH para marcar/desmarcar
+├── quinielas/:id/matches  GET    Partidos visibles para el usuario
 ├── matches                GET    Listar partidos
 │                          POST   Crear partido (super admin)
 ├── matches/:id            GET    Detalle del partido
 │                          PATCH  Actualizar resultado oficial
+├── matches/:id/live       PATCH  Actualizar marcador en vivo (manual override)
 └── jobs/
-    ├── lock-matches       POST   Bloquear partidos (cron)
-    ├── generate-random-predictions  
-                           POST   Generar bot predictions (cron)
-    └── recalculate-scores POST   Recalcular puntos (cron)
+    ├── sync-live-scores            POST   Sync ESPN → Match (cron)
+    ├── lock-matches                POST   Bloquear partidos (cron)
+    ├── generate-random-predictions POST   Bot aleatorio (cron)
+    └── recalculate-scores          POST   Recalcular puntos (cron)
 ```
 
 ### Ejemplos de Endpoints Principales
@@ -1148,15 +1168,22 @@ export function isMatchLocked(
 - ✅ Backend rechaza cambios con 409 Conflict
 - ✅ Si está habilitado en quiniela, bot genera predicciones automáticas
 
-### Predicciones Automáticas (Bot)
+### Predicciones Automáticas (Bot — doble compuerta)
 
-El bot genera predicciones aleatorias **solo si se cumplen TODAS estas condiciones:**
+El bot genera predicciones aleatorias **solo si se cumplen TODAS estas condiciones**:
 
-1. La quiniela tiene `randomPredictionsEnabled = true`
-2. El participante tiene `autoPredictionsEnabled = true`
-3. El participante está `ACTIVE` en la quiniela
-4. El participante NO tiene predicción registrada para ese partido
-5. El partido llegó a su momento de bloqueo
+| # | Condición | Dónde se controla |
+|---|-----------|-------------------|
+| 1 | `Quiniela.randomPredictionsEnabled = true` | Configuración de quiniela (admin) |
+| 2 | `QuinielaMember.autoPredictionsEnabled = true` | Dashboard del propio user (toggle "Mis predicciones automáticas") |
+| 3 | `QuinielaMember.status = 'ACTIVE'` | Activación por admin de quiniela |
+| 4 | El user NO es `globalRole=SUPER_ADMIN` | Hard-coded (admins no compiten) |
+| 5 | No existe `Prediction` para `(quinielaId,userId,matchId)` | Si predijo manual, no se sobrescribe |
+| 6 | El partido llegó a su momento de bloqueo (`kickoff - lockMinutes`) | Cron `lock-matches` |
+
+Esto se conoce internamente como la **doble compuerta**: el admin controla si la
+quiniela permite el bot (compuerta 1) y cada participante decide si se le aplica
+(compuerta 2). Componente UI: `src/components/MyAutoPredictionsToggle.tsx`.
 
 **Proceso:**
 ```
@@ -1399,7 +1426,7 @@ User                                System
   │   └─→ Input goles visitante: 0
   │
   └─→ Sistema (onChange):
-      ├─→ Debounce 500ms
+      ├─→ Debounce 350ms
       └─→ POST /api/quinielas/.../predictions/upsert
           ├─→ Valida: usuario ACTIVE, partido no bloqueado
           ├─→ Crea/actualiza Prediction
@@ -1501,34 +1528,36 @@ Sistema                             Resultado
 
 ```bash
 # Database
-DATABASE_URL="postgresql://postgres:cisco1372@localhost:5432/bd_kiniela?schema=public"
+DATABASE_URL="postgresql://postgres:<TU_PASS_LOCAL>@localhost:5432/bd_kiniela?schema=public"
 
 # NextAuth
 NEXTAUTH_URL="http://localhost:3001"
-NEXTAUTH_SECRET="SUPER_SECRET_KEY_CHANGE_THIS"
+NEXTAUTH_SECRET="<string-largo-random>"
 
-# SMTP (emails)
-SMTP_HOST="smtp.resend.com"
-SMTP_PORT=587
-SMTP_USER="resend"
-SMTP_PASS="re_YOUR_RESEND_API_KEY"
-SMTP_FROM="Ki-Niela <onboarding@resend.dev>"
-ADMIN_NOTIFY_EMAIL="daniel.cr031288@gmail.com"
+# Cron jobs
+CRON_SECRET="<string-largo-random>"
+
+# Email — preferir Brevo HTTP API (HTTPS:443, único transport viable en Railway)
+BREVO_API_KEY="xkeysib-..."
+
+# Email — fallback SMTP (no funciona en Railway free/hobby)
+# SMTP_HOST="smtp-relay.brevo.com"
+# SMTP_PORT="587"
+# SMTP_USER="<account>"
+# SMTP_PASS="<smtp-key>"
+
+SMTP_FROM='Ki-Niela <noreply@tu-dominio>'
+ADMIN_NOTIFY_EMAIL="admin@example.com"
 ```
 
 **Railway Environment** (producción)
 
-```
-DATABASE_URL="postgresql://postgres:...@zephyr.proxy.rlwy.net:32314/railway"
-NEXTAUTH_URL="https://ki-niela-production.up.railway.app"
-NEXTAUTH_SECRET="(value)"
-SMTP_HOST="smtp.resend.com"
-SMTP_PORT="587"
-SMTP_USER="resend"  ← CRÍTICO: NO VACÍO
-SMTP_PASS="re_..."
-SMTP_FROM="Ki-Niela <onboarding@resend.dev>"
-ADMIN_NOTIFY_EMAIL="daniel.cr031288@gmail.com"
-```
+Las mismas variables, pero `DATABASE_URL` apunta al PostgreSQL servido por
+Railway (tomar el valor del dashboard) y `NEXTAUTH_URL` al dominio público.
+
+> **Importante:** No commitear nunca credenciales. `.env.local` está en
+> `.gitignore`. Si se filtra una credencial (en código, doc o screenshot),
+> rotarla inmediatamente desde el dashboard del proveedor.
 
 ### Build & Deploy a Railway
 
@@ -1669,15 +1698,22 @@ describe('Scoring', () => {
 ### Los emails no se envían
 
 **Checklist:**
-1. ¿`SMTP_USER` está en Railway? (no vacío, debe ser "resend")
-2. ¿`ADMIN_NOTIFY_EMAIL` existe y es válido?
-3. ¿Resend API key (`SMTP_PASS`) sigue siendo válida?
-4. ¿El app hizo redeploy después de cambiar variables?
+1. `GET /api/admin/diag/mailer` debe responder `BREVO_API_KEY_set: true` y `transport: 'brevo-http-api'`.
+2. En Brevo → Configuración → Seguridad → IPs autorizadas: el bloqueo para "Claves API" debe estar **desactivado**, o bien `0.0.0.0/0` no funciona como wildcard.
+3. Revisa logs de Railway buscando `[mailer:brevo-api]` para ver el `reason` del fallo.
+4. `ADMIN_NOTIFY_EMAIL` debe ser email válido y accesible (mira spam la primera vez).
 
-**Test local:**
-```bash
-npx tsx scripts/test-smtp.ts
+**Test desde la consola del browser** (estando logueado como SUPER_ADMIN):
+```js
+fetch('/api/admin/diag/mailer', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ to: 'tucorreo@example.com' }),
+}).then(r => r.json()).then(console.log)
 ```
+
+Respuesta esperada: `{ result: { ok: true, messageId: "..." } }` y el correo
+llega.
 
 ### Predicciones no se guardan
 
@@ -1689,12 +1725,36 @@ npx tsx scripts/test-smtp.ts
 
 ### Bot no genera predicciones
 
-**Checklist:**
-1. ¿`randomPredictionsEnabled = true` en quiniela?
-2. ¿Usuario tiene `autoPredictionsEnabled = true`?
-3. ¿Usuario está `ACTIVE` en quiniela?
-4. ¿Ya no existe predicción previa?
-5. ¿Cron job está corriendo? (Railway logs)
+**Checklist (las dos compuertas):**
+1. `Quiniela.randomPredictionsEnabled = true` (admin de quiniela)
+2. `QuinielaMember.autoPredictionsEnabled = true` (cada user en su dashboard)
+3. `QuinielaMember.status = 'ACTIVE'`
+4. El user NO es `globalRole=SUPER_ADMIN` (los admins no compiten)
+5. No existe predicción previa para ese partido
+6. Cron `/api/jobs/generate-random-predictions` está corriendo
+
+### Posiciones vacío pero el dashboard dice "Posición 1"
+
+Bug ya corregido. Si reaparece: verificar que ambos endpoints (dashboard
+server-side y `/api/quinielas/:id/leaderboard`) excluyen `globalRole=SUPER_ADMIN`
+y agregan tail de members `ACTIVE` sin scores.
+
+### Auto-vincular partidos en `/admin/partidos` no encuentra match
+
+1. Verificar que ESPN devuelve los nombres esperados en el panel de fixtures.
+2. `normalize()` en `src/app/admin/partidos/page.tsx` cubre conectores
+   `y`/`e`/`and`/`&` — si aparece otro separador (slash, guión bajo) extender.
+3. Países con nombres muy distintos en EN/ES → agregar al alias group de
+   `TEAM_ALIASES` en el mismo archivo.
+
+### Live scores no actualizan
+
+1. Cron de `/api/jobs/sync-live-scores` debe correr cada minuto con
+   `x-cron-secret`.
+2. El partido debe tener `externalId` vinculado y `manualOverride = false`.
+3. ESPN puede tardar hasta 60 s en reportar un cambio.
+4. Para forzar un sync manual: botón "Test sync" en `/admin/partidos`
+   (`POST /api/admin/sync-now`).
 
 ### CSS/estilos no aparecen en Railway
 

@@ -1,597 +1,331 @@
-# 📋 Documentación de Implementación Ki-Niela
+# Ki-Niela — Documentación de Implementación
 
-## Tabla de Contenidos
-1. [Visión General](#visión-general)
-2. [Quiniela de Amistosos Internacionales](#quiniela-de-amistosos-internacionales)
-3. [Sistema de Perfiles de Usuario](#sistema-de-perfiles-de-usuario)
-4. [Sistema de Emails Automáticos](#sistema-de-emails-automáticos)
-5. [Control de Visibilidad de Quinielas](#control-de-visibilidad-de-quinielas)
-6. [Configuración de SMTP en Railway](#configuración-de-smtp-en-railway)
-7. [Cómo Probar Localmente](#cómo-probar-localmente)
+Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qué**, el **por qué** y el **cómo probar/operar**. Para arquitectura general ver [`GUIA_COMPLETA.md`](GUIA_COMPLETA.md); para integración de marcadores ver [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md).
+
+> **Última revisión:** 2026-05-29
 
 ---
 
-## Visión General
+## Tabla de contenidos
 
-Ki-Niela es una aplicación web de quinielas deportivas recreativas. En este documento documentamos las siguientes implementaciones:
-
-- ✅ Nueva quiniela de "Amistosos Internacionales" (mayo-junio 2026)
-- ✅ Sistema de perfil personal donde usuarios pueden cambiar contraseña y email
-- ✅ Emails automáticos en registro, activación y solicitudes de acceso
-- ✅ Control para admin de habilitar/deshabilitar quinielas
-- ✅ Fixes de responsividad para mobile (Android/iOS)
-
-**Stack Técnico:**
-- Next.js 16.2.6 (App Router)
-- React Hook Form + Zod (validación)
-- PostgreSQL + Prisma (base de datos)
-- NextAuth (autenticación)
-- Resend (servicio de emails)
-- Tailwind CSS (estilos)
+1. [Quiniela "Amistosos Internacionales"](#1-quiniela-amistosos-internacionales)
+2. [Perfil de usuario](#2-perfil-de-usuario)
+3. [Emails transaccionales (Brevo HTTP API)](#3-emails-transaccionales-brevo-http-api)
+4. [Visibilidad de quinielas](#4-visibilidad-de-quinielas)
+5. [Marcadores en vivo + admin de partidos](#5-marcadores-en-vivo--admin-de-partidos)
+6. [Bot de pronósticos: doble compuerta](#6-bot-de-pronósticos-doble-compuerta)
+7. [Autosave de marcadores + overlay de guardado](#7-autosave-de-marcadores--overlay-de-guardado)
+8. [Posiciones: SUPER_ADMIN excluido del ranking](#8-posiciones-super_admin-excluido-del-ranking)
+9. [Auto-vincular partidos: matching difuso de nombres](#9-auto-vincular-partidos-matching-difuso-de-nombres)
+10. [Endpoint diagnóstico de mailer](#10-endpoint-diagnóstico-de-mailer)
+11. [Setup local + troubleshooting](#11-setup-local--troubleshooting)
 
 ---
 
-## Quiniela de Amistosos Internacionales
+## 1. Quiniela "Amistosos Internacionales"
 
-### ¿Qué se hizo?
+Evento separado del Mundial 2026, con 37 amistosos del 30 mayo al 3 junio 2026.
 
-Se creó un nuevo evento "Amistosos Internacionales" con 37 partidos amistosos internacionales programados para mayo-junio 2026, completamente separado de la Copa del Mundo 2026.
+**Archivos:**
+- `scripts/seed-amistosos.ts` — script idempotente: crea Event, 70 Teams, 5 Matchdays, 37 Matches, 1 Quiniela (`AMISTOSOS2026`).
+- `src/lib/flags.ts` — mapping FIFA-3 → ISO-2 expandido para 25+ países nuevos.
 
-### Archivos Involucrados
-
-**`scripts/seed-amistosos.ts`** - Script de inicialización de datos
-
-Este archivo:
-1. Crea un nuevo **Event** llamado "Amistosos Internacionales" con:
-   - ID: `event-amistosos-2026`
-   - Fecha inicio: 30 mayo 2026
-   - Fecha fin: 3 junio 2026
-   - Zona horaria: America/Costa_Rica
-
-2. Crea **70 Equipos** (países participantes como ZIM, FIN, ISL, etc.)
-
-3. Crea **5 Matchdays** (jornadas):
-   - Sábado 30 mayo: 6 partidos
-   - Domingo 31 mayo: 9 partidos
-   - Lunes 1 junio: 7 partidos
-   - Martes 2 junio: 5 partidos
-   - Miércoles 3 junio: 10 partidos
-
-4. Crea **37 Matches** (partidos) con:
-   - Equipos local/visitante
-   - Estadio
-   - Hora de inicio (en UTC convertida desde hora Costa Rica)
-   - Fase: GROUPS (todos son amistosos)
-
-5. Crea una **Quiniela**:
-   - ID: `quiniela-amistosos-2026`
-   - Nombre: "Ki-Niela Amistosos Internacionales"
-   - Código de invitación: `AMISTOSOS2026`
-   - Admin: `admin@kiniela.com`
-   - Mismo config que Mundial 2026 (lock 10 min antes, pronósticos aleatorios habilitados)
-
-### Cómo Usar
-
-**Ejecutar localmente contra tu base de datos local:**
+**Ejecutar contra BD local:**
 ```bash
 npx tsx scripts/seed-amistosos.ts
 ```
 
-**Ejecutar contra Railway (base de producción):**
+Contra Railway: usa la `DATABASE_URL` de producción (tomarla del dashboard de Railway, **no** ponerla en commits).
+
+---
+
+## 2. Perfil de usuario
+
+Cada usuario puede cambiar nombre, email y contraseña desde `/perfil`.
+
+**Archivos:**
+- `src/app/perfil/page.tsx` — formulario (Hook Form + Zod). Inputs `h-11 text-base`, `pb-24` para no chocar con el bottom nav móvil, `autoComplete` para password managers.
+- `src/app/api/me/route.ts` — `PATCH /api/me`. Valida con Zod, hashea con `bcryptjs` cost 12. Si se cambia password, exige `currentPassword` y lo verifica con `compareSync`. Si se cambia email, comprueba que no esté en uso.
+
+**Validaciones:**
+- `name`: 1–80 chars
+- `email`: válido + único
+- `newPassword`: ≥ 8 chars + confirmación
+- `currentPassword`: requerido si hay `newPassword`
+
+---
+
+## 3. Emails transaccionales (Brevo HTTP API)
+
+### Por qué Brevo HTTP, no SMTP
+
+Railway **bloquea outbound SMTP** (puertos 25/465/587) en planes free/hobby. Resend funcionaba en sandbox solo para el email del propietario. Brevo SMTP también queda bloqueado por Railway. La solución: **Brevo HTTP API** (`POST https://api.brevo.com/v3/smtp/email`), que va por HTTPS:443 y nunca se bloquea.
+
+### Cómo está implementado
+
+`src/lib/mailer.ts` tiene dos transports:
+
+1. **`sendViaBrevoApi`** — preferido cuando `BREVO_API_KEY` está set. Hace fetch directo al endpoint REST.
+2. **`sendViaSmtp`** — fallback con Nodemailer (timeouts explícitos, `requireTLS` cuando port 587). Sirve para entornos que sí permiten SMTP outbound.
+
+`sendMail(msg)` decide automáticamente: si `BREVO_API_KEY` está presente → HTTP API; si no → SMTP. Nunca lanza: devuelve `{ ok: true, messageId }` o `{ ok: false, reason }` y loguea.
+
+**Llamadas siempre fire-and-forget** (`void send(...).catch(log)`) para que la latencia del email no bloquee el response del endpoint que dispara el correo. Ejemplo: en `PATCH /api/admin/users/:id` el toast "Usuario activado" sale antes de que el correo se envíe.
+
+### Plantillas (`src/lib/mailer-templates.ts`)
+
+```
+sendNewUserRegisteredToAdmin       — al admin: hay registro nuevo
+sendWelcomeToNewUser               — al user: bienvenida + pendiente activación
+sendUserActivatedGlobally          — al user: cuenta activada globalmente
+sendQuinielaAccessRequestToAdmin   — a los admins de la quiniela: solicitud nueva
+sendQuinielaAccessApproved         — al user: aprobado en una quiniela
+```
+
+### Variables de entorno
+
+```
+# Preferido — HTTP API (HTTPS, funciona en Railway)
+BREVO_API_KEY="xkeysib-..."
+
+# Fallback — SMTP (no funciona en Railway free/hobby por el bloqueo de outbound)
+SMTP_HOST="smtp-relay.brevo.com"
+SMTP_PORT="587"
+SMTP_USER="<account>"
+SMTP_PASS="<smtp-key>"
+
+# Comunes
+SMTP_FROM='Ki-Niela <noreply@tu-dominio>'
+ADMIN_NOTIFY_EMAIL="admin@example.com"
+```
+
+### Brevo: IPs autorizadas
+
+Brevo trae el bloqueo de IP **activado por defecto** para Claves API. Si Railway cambia de IP entre deploys, los correos rechazan con `"unrecognised IP address X.X.X.X"`. Solución: en Brevo → Configuración → Seguridad → **IPs autorizadas** → desactivar el bloqueo para Claves API. La protección real es el secret de la API key.
+
+---
+
+## 4. Visibilidad de quinielas
+
+SUPER_ADMIN puede archivar/habilitar quinielas con switch desde `/admin/usuarios`.
+
+- `Quiniela.status='ACTIVE'` → visible para todos
+- `Quiniela.status='ARCHIVED'` → solo el SUPER_ADMIN la ve
+
+**Archivos:**
+- `src/app/api/admin/quinielas/route.ts` — `GET` con todas las quinielas (incluso ARCHIVED).
+- `src/app/api/admin/quinielas/[quinielaId]/route.ts` — `PATCH` con `{ status: 'ACTIVE'|'CLOSED'|'ARCHIVED' }`. Crea AuditLog.
+- `src/app/admin/usuarios/page.tsx` — sección "Visibilidad de Quinielas" con switch ON/OFF y optimistic update + rollback en error.
+- `src/app/quinielas/page.tsx` — el listado público filtra `status !== 'ARCHIVED'` para no-admins.
+
+---
+
+## 5. Marcadores en vivo + admin de partidos
+
+Detalles completos en [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md). Resumen:
+
+- **Provider:** ESPN (`site.api.espn.com`), gratis, sin API key. Antes era Sofascore; se cambió porque la cobertura de amistosos era inestable.
+- **Cron** llama `/api/jobs/sync-live-scores` cada minuto con `x-cron-secret`.
+- **Vinculación:** UI en `/admin/partidos`. Buscador de fixtures por fecha + filtro de torneo. Dos botones por fila vinculada: editar (lápiz azul) y desvincular (Unlink rojo). Hay también "Auto-vincular partidos visibles por nombre".
+- **Editor manual de marcador** inline: número local + número visitante + select de status, escribe a `Match.liveHomeGoals/liveAwayGoals/status` vía `PATCH /api/matches/:id/live`.
+- **`manualOverride`** por partido — si está ON, el cron deja de tocarlo.
+- **Estados ESPN** se mapean con un encoding `state|detail` para distinguir "halftime" (HT) de "in-progress 41'" (que también contiene "ft" como substring).
+
+### Bug fix de auto-vincular: Bosnia y Herzegovina ↔ Bosnia-Herzegovina
+
+ESPN usa "Bosnia-Herzegovina"; Ki-Niela tiene "Bosnia y Herzegovina". `normalize()` ahora elimina conectores `y`/`e`/`and`/`&` antes de strippar separadores, así ambos colapsan a `bosniaherzegovina`. Cubre también "Trinidad y Tobago", "Antigua y Barbuda", etc.
+
+```ts
+// src/app/admin/partidos/page.tsx
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+(?:y|e|and|&)\s+/g, ' ')
+    .replace(/[^a-z0-9]/g, '')
+}
+```
+
+---
+
+## 6. Bot de pronósticos: doble compuerta
+
+Antes el bot solo respondía al switch global de la quiniela. Ahora son **dos compuertas independientes**:
+
+| Compuerta | Donde se configura | Quién la cambia |
+|-----------|-------------------|-----------------|
+| `Quiniela.randomPredictionsEnabled` | `/admin/usuarios` y configuración de quiniela | QUINIELA_ADMIN o SUPER_ADMIN |
+| `QuinielaMember.autoPredictionsEnabled` | Dashboard de la quiniela (toggle "Mis predicciones automáticas") | El propio participante |
+
+El bot genera predicción **solo si TODAS estas se cumplen**: ambas compuertas en `true`, member en `ACTIVE`, no existe predicción previa, partido llegó al lock.
+
+**Archivos:**
+- `src/components/MyAutoPredictionsToggle.tsx` — UI del switch personal con warning si la quiniela tiene el bot global apagado.
+- `src/app/api/quinielas/[quinielaId]/me/auto-predictions/route.ts` — `PATCH` con `{ enabled: boolean }`.
+- `src/app/quinielas/[quinielaId]/dashboard/page.tsx` — incrusta el toggle entre stats y próximos partidos.
+
+---
+
+## 7. Autosave de marcadores + overlay de guardado
+
+### Problema original
+
+Los marcadores se guardaban con `onChange` solo cuando los dos inputs (local/visitante) tenían valor. Al cambiar de menú antes de llenar ambos, **se perdía la predicción**. Y el spinner "Guardando…" se quedaba pegado a veces.
+
+### Solución
+
+`src/hooks/useAutosave.ts`:
+- Debounce **350 ms** por matchId.
+- `onBlur` dispara `flush(matchId)`: si solo hay un input lleno, trata el otro como `0`.
+- En `beforeunload`/cambio de pestaña: usa `navigator.sendBeacon` + `fetch keepalive` para enviar antes de que se cancele.
+- `fire` callback estabilizado con refs (deps `[]`) — antes el `useEffect` con `[inFlight]` re-armaba el cleanup en cada render y disparaba `flushAll(true)`.
+- `sendBeacon` actualiza `statusMap` a `'saved'` optimistic (porque beacon no devuelve respuesta).
+
+`src/app/quinielas/[quinielaId]/pronosticos/page.tsx`:
+- **Overlay full-screen modal** con `BallLoader` (balón animado del proyecto), `backdrop-blur-sm`, mostrado tras 300 ms de pendiente para no flashear en saves rápidos.
+- `aria-busy="true"` y `onClick={preventDefault}` bloquean navegación durante el guardado.
+- Hooks **antes** de cualquier early return — error de "Rendered more hooks than during the previous render" si se ponen después de `if (isLoading) return ...`.
+
+### Variables visibles al usuario (`src/components/quiniela/AutosaveStatus.tsx`)
+
+- `Guardando…` — request en vuelo
+- `Guardado` — última respuesta OK
+- `Error al guardar` — toast rojo
+- `Partido bloqueado` — input deshabilitado
+
+---
+
+## 8. Posiciones: SUPER_ADMIN excluido del ranking
+
+### Bug original
+
+El dashboard mostraba "Posición 1" para el admin pero `/posiciones` decía "Aún no hay puntos registrados". Dos endpoints calculaban distinto.
+
+### Causas
+
+1. `/api/quinielas/:id/leaderboard` filtraba `role: 'PARTICIPANT'` y excluía a admins.
+2. El dashboard hacía `score.groupBy({ where: { quinielaId } })` sin filtrar status/rol.
+3. Ningún cálculo excluía SUPER_ADMIN globales (no son competidores).
+
+### Fixes
+
+`src/app/api/quinielas/[quinielaId]/leaderboard/route.ts`:
+- Quita el filtro de `role`. Incluye **a todos los miembros `ACTIVE`** (un QUINIELA_ADMIN que juega también suma).
+- **Excluye `globalRole=SUPER_ADMIN`** vía `user: { globalRole: { not: 'SUPER_ADMIN' } }`.
+- En scope `general`, agrega tail con miembros activos sin scores (con 0 pts) — para que no diga "vacío" cuando hay competidores que aún no han calificado.
+
+`src/app/quinielas/[quinielaId]/dashboard/page.tsx`:
+- La tarjeta "Posición" usa el mismo filtro y lógica de tail.
+
+`src/app/api/jobs/recalculate-scores/route.ts`:
+- Ignora predicciones de SUPER_ADMIN al calcular Score rows.
+- Al inicio de cada run, hace `score.deleteMany({ where: { userId: { in: <super_admins> } } })` para limpiar rows que se hayan creado en versiones previas.
+
+---
+
+## 9. Auto-vincular partidos: matching difuso de nombres
+
+Ya cubierto en §5 con el ejemplo de Bosnia. Más allá de eso, `teamsMatch(a, b)` sigue una secuencia de comparaciones:
+
+1. `normalize` exacto
+2. Substring containment (4+ chars) para `'mexico' ⊂ 'mexicofootballteam'`
+3. Equivalencia por **TEAM_ALIASES** — grupos de variantes (FIFA, inglés, español, con/sin acentos)
+4. Stripping de sufijos comunes (`nationalfootballteam`, `national`, `team`)
+
+Cada nuevo país que dé problemas se agrega como una fila más a `TEAM_ALIASES` en `src/app/admin/partidos/page.tsx`.
+
+---
+
+## 10. Endpoint diagnóstico de mailer
+
+`/api/admin/diag/mailer` (requiere SUPER_ADMIN):
+
+- `GET` → reporta snapshot de config: `transport: brevo-http-api | smtp`, `BREVO_API_KEY_set`, `SMTP_*`, `ADMIN_NOTIFY_EMAIL`, `NEXTAUTH_URL`, `NODE_ENV`. Sin secretos.
+- `POST { to: "email@dest" }` → manda un correo de prueba y devuelve `{ to, result, env }`.
+
+Útil para confirmar desde producción que Railway tiene las vars correctas y Brevo no rechaza por IP. Probar desde la consola del browser:
+
+```js
+fetch('/api/admin/diag/mailer', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ to: 'tucorreo@example.com' }),
+}).then(r => r.json()).then(console.log)
+```
+
+---
+
+## 11. Setup local + troubleshooting
+
+### Setup
+
 ```bash
-DATABASE_URL="postgresql://postgres:ubhbMSXtLoZlEDYgnYJQjHyPcYvSlqEH@zephyr.proxy.rlwy.net:32314/railway" npx tsx scripts/seed-amistosos.ts
-```
-
-**Resultado:**
-- El script es **idempotente** (se puede correr múltiples veces sin duplicar datos)
-- Los datos ya están cargados en Railway
-- Los usuarios pueden unirse con código: `AMISTOSOS2026`
-
-### Cambios en Código
-
-**`src/lib/flags.ts`** - Mapping de banderas
-
-Se expandió el mapping de códigos FIFA a ISO 2-letter codes para 25 nuevos países:
-- `ALB: 'al'` (Albania)
-- `BUL: 'bg'` (Bulgaria)
-- `FIN: 'fi'` (Finlandia)
-- `GEO: 'ge'` (Georgia)
-- ... (y 21 más)
-
-Esto permite que las banderas de países nuevos se muestren correctamente en la UI usando flagcdn.com.
-
----
-
-## Sistema de Perfiles de Usuario
-
-### ¿Qué se hizo?
-
-Cada usuario ahora tiene acceso a su perfil personal donde puede:
-- Cambiar su nombre
-- Cambiar su email
-- Cambiar su contraseña (con validación de contraseña actual)
-
-### Archivos Involucrados
-
-**`src/app/perfil/page.tsx`** - Página de perfil
-
-Una página Next.js que permite al usuario:
-
-1. **Editar datos personales** (nombre y email):
-   - Valida nombre ≥ 1 carácter, ≤ 80
-   - Valida email válido
-   - Evita duplicados de email
-
-2. **Cambiar contraseña**:
-   - Requiere contraseña actual (validación)
-   - Nueva contraseña ≥ 8 caracteres
-   - Confirmación de contraseña (deben coincidir)
-
-3. **Responsive**: Optimizada para mobile/tablet/desktop
-   - Inputs con altura `h-11` para touch
-   - Padding inferior `pb-24` para no ocultarse detrás del navbar móvil
-   - Teclados contextuales (email, password) en móvil
-   - Soporta password managers (autoComplete)
-
-**`src/app/api/me/route.ts`** - API para actualizar perfil
-
-Endpoint `PATCH /api/me` que:
-
-1. **Autenticación**: Solo usuarios logueados
-2. **Validación con Zod**:
-   - `name`: string 1-80 chars (opcional)
-   - `email`: email válido (opcional)
-   - `currentPassword`: string requerido si cambias contraseña
-   - `newPassword`: string ≥ 8 chars
-   - Regla custom: si pones newPassword, currentPassword es obligatorio
-
-3. **Lógica**:
-   - Si cambias email → verifica que no esté en uso
-   - Si cambias contraseña → valida contraseña actual con `compareSync(bcryptjs)`
-   - Hashea nueva contraseña con `hashSync(12)`
-   - Actualiza usuario en BD
-   - Retorna usuario + mensaje de éxito
-
-**`src/components/layout/AppShell.tsx`** - Dropdown de perfil
-
-El navbar ahora muestra:
-- **Desktop**: Avatar + nombre + dropdown menu
-  - Click abre dropdown con "Mi perfil" y "Cerrar sesión"
-  - Click afuera cierra automáticamente
-- **Mobile**: Avatar en hamburger menu
-  - "Mi perfil" aparece encima de "Cerrar sesión"
-
-### Cómo Usar
-
-1. Usuario hace **login**
-2. Hace click en su **avatar/nombre** en header (desktop) o **hamburger menu** (mobile)
-3. Selecciona **"Mi perfil"**
-4. Ve página `/perfil` con:
-   - Su avatar (iniciales en círculo)
-   - Sección "Datos personales": nombre + email
-   - Sección "Cambiar contraseña": contraseña actual + nueva + confirmación
-5. Guarda cambios → toast de éxito/error
-
-### Validaciones
-
-**Cambio de email:**
-```
-- Email válido (RFC 5322)
-- No duplicado en BD
-- Toast: "Perfil actualizado" si todo bien
-- Toast: "Ese correo ya está en uso" si existe
-```
-
-**Cambio de contraseña:**
-```
-- Contraseña actual debe coincidir (compareSync)
-- Nueva contraseña ≥ 8 caracteres
-- Confirmación debe coincidir
-- Toast: "Contraseña actualizada" si todo bien
-- Toast: "Contraseña actual incorrecta" si no coincide
-```
-
----
-
-## Sistema de Emails Automáticos
-
-### ¿Qué se hizo?
-
-Se implementó un sistema de emails automáticos que notifica a admins y usuarios en 5 momentos clave:
-
-1. ✉️ Usuario se registra → bienvenida + aviso pendiente
-2. ✉️ Admin activa usuario globalmente → notificación al usuario
-3. ✉️ Admin activa usuario → aviso al admin que se registró nuevo usuario
-4. ✉️ Usuario solicita acceso a quiniela → notificación a admins de quiniela
-5. ✉️ Admin aprueba usuario en quiniela → aviso al usuario
-
-### Archivos Involucrados
-
-**`src/lib/mailer-templates.ts`** - Plantillas de emails
-
-5 funciones que retornan emails HTML con branding Ki-Niela:
-
-```typescript
-// Funciones exportadas:
-1. sendNewUserRegisteredToAdmin({ userName, userEmail })
-   → Email al admin notificando nuevo registro
-
-2. sendWelcomeToNewUser({ userName, userEmail })
-   → Bienvenida al usuario + aviso pendiente de activación
-
-3. sendUserActivatedGlobally({ userName, userEmail })
-   → Notificación que el usuario fue activado globalmente
-
-4. sendQuinielaAccessRequestToAdmin({ 
-     adminEmail, userName, userEmail, quinielaName, quinielaId 
-   })
-   → Notificación a admin de quiniela que alguien solicita acceso
-
-5. sendQuinielaAccessApproved({ 
-     userName, userEmail, quinielaName, quinielaId 
-   })
-   → Notificación al usuario que fue aprobado en quiniela
-```
-
-**Características de cada email:**
-- Logo Ki-Niela en header (72x72px)
-- Título personalizado
-- Gradient azul-verde (branding)
-- Links contextuales a la acción (Activar usuario, Ir a quiniela, etc)
-- Footer con crédito
-- Fallback text para clientes que no soportan HTML
-
-**`src/app/api/auth/register/route.ts`** - Registro
-
-Modificado para:
-1. Crear usuario con `status: 'INACTIVE'` (pendiente activación)
-2. Enviar 2 emails en paralelo (no bloquean el registro):
-   - Bienvenida al usuario
-   - Notificación al admin
-3. Responder al usuario: "Cuenta creada. Un administrador debe activarte antes de poder ingresar."
-
-**`src/app/api/admin/users/[userId]/route.ts`** - Activación global
-
-Modificado para:
-1. Detectar cuando admin hace `action: 'activate'`
-2. Si usuario estaba NO_ACTIVE → enviar email de activación
-3. No bloquea respuesta (`.catch()` solo loguea)
-
-**`src/app/api/quinielas/[quinielaId]/members/request-access/route.ts`** - Solicitud de acceso
-
-Modificado para:
-1. Crear registro QuinielaMember con `status: 'PENDING_APPROVAL'`
-2. Buscar todos los admins de esa quiniela
-3. Enviar email a CADA admin notificando la solicitud
-4. Incluir link directo a `/quinielas/[id]/participantes`
-
-**`src/app/api/quinielas/[quinielaId]/members/[memberId]/route.ts`** - Aprobación en quiniela
-
-Modificado para:
-1. Detectar cuando admin hace `action: 'activate'`
-2. Si miembro estaba NO_ACTIVE → enviar email de aprobación
-3. Email incluye link a dashboard de quiniela
-
-### Cómo Probar Localmente
-
-**Paso 1:** Configurar variables de ambiente (`.env.local`):
-```
-SMTP_HOST=smtp.resend.com
-SMTP_PORT=587
-SMTP_USER=resend
-SMTP_PASS=re_SYtRLKLt_EJrP5uywBy4ZW8VCdrZaEFmY
-SMTP_FROM="Ki-Niela" <onboarding@resend.dev>
-ADMIN_NOTIFY_EMAIL=tu-correo@gmail.com
-```
-
-**Paso 2:** En desarrollo local, si no tienes SMTP configurado:
-- Los emails se **loguean a consola** (no se envían realmente)
-- Verás líneas como:
-  ```
-  [mailer:dev] To=usuario@gmail.com Subject=¡Bienvenido a Ki-Niela!
-  Hola Usuario, tu cuenta en Ki-Niela fue creada...
-  ```
-
-**Paso 3:** En producción (Railway):
-- Los emails se envían realmente via Resend
-- Usuario recibe correos en su inbox
-
-### En Railway
-
-Las variables ya están configuradas en el dashboard:
-```
-SMTP_HOST = smtp.resend.com
-SMTP_PORT = 587
-SMTP_USER = resend  ← (CRÍTICO: estaba vacío antes)
-SMTP_PASS = re_SYtRLKLt_EJrP5uywBy4ZW8VCdrZaEFmY
-SMTP_FROM = "Ki-Niela" <onboarding@resend.dev>
-ADMIN_NOTIFY_EMAIL = daniel.cr031288@gmail.com  ← (NUEVA)
-```
-
-**Si los emails no llegan:**
-1. Verifica que `SMTP_USER=resend` (no vacío)
-2. Verifica que `ADMIN_NOTIFY_EMAIL` apunte a email válido
-3. Revisa logs de Railway para errores
-
-### Flujo de Ejemplo
-
-**Usuario "ale" se registra:**
-1. Completa form: nombre=Ale, email=ale@example.com, password=pass123
-2. POST `/api/auth/register` crea usuario con `status: 'INACTIVE'`
-3. Envía email a ale@example.com: "¡Bienvenido a Ki-Niela! Pendiente de activación..."
-4. Envía email a admin@kiniela.com: "Se registró: Ale (ale@example.com). Activarlo en /admin/usuarios"
-5. Usuario ve toast: "Cuenta creada. Un administrador debe activarte..."
-
-**Admin activa a "ale":**
-1. Va a `/admin/usuarios`
-2. Ve "Ale" en lista de Pendientes
-3. Click botón "Activar"
-4. PATCH `/api/admin/users/ale-id` con `action: 'activate'`
-5. Ale recibe email: "Tu cuenta Ki-Niela fue activada ✅. Inicia sesión en..."
-6. Admin ve toast: "Usuario activado"
-
-**Ale solicita acceso a quiniela con código AMISTOSOS2026:**
-1. Ale hace login
-2. Va a `/quinielas` → ve "Amistosos Internacionales"
-3. Click "Entrar" → modal pide código
-4. Ingresa `AMISTOSOS2026`
-5. POST `/api/quinielas/.../members/request-access`
-6. Admins de quiniela reciben email: "Ale solicitó acceso a Amistosos Internacionales. Ver solicitudes..."
-7. Ale ve toast: "Solicitud enviada. Espera aprobación del administrador"
-
-**Admin aprueba a Ale:**
-1. Admin va a `/quinielas/.../participantes`
-2. Ve "Ale" con estado "Pendiente"
-3. Click "Activar"
-4. PATCH `/api/quinielas/.../members/ale-member-id` con `action: 'activate'`
-5. Ale recibe email: "Aprobado en Amistosos Internacionales ✅. Ir a quiniela..."
-6. Admin ve toast: "Usuario activado"
-
----
-
-## Control de Visibilidad de Quinielas
-
-### ¿Qué se hizo?
-
-Super admin ahora puede habilitar (ACTIVE) o archivar (ARCHIVED) quinielas:
-- Quinielas **ACTIVE** → aparecen en "Mis Quinielas" y "Browseable"
-- Quinielas **ARCHIVED** → solo visible para super admin
-
-### Archivos Involucrados
-
-**`src/app/api/admin/quinielas/route.ts`** - Listar quinielas
-
-Endpoint `GET /api/admin/quinielas`:
-- Solo accesible por SUPER_ADMIN
-- Retorna lista de todas las quinielas con:
-  - nombre, status, evento
-  - count de miembros activos
-  - código de invitación
-
-**`src/app/api/admin/quinielas/[quinielaId]/route.ts`** - Cambiar status
-
-Endpoint `PATCH /api/admin/quinielas/[id]`:
-- Solo accesible por SUPER_ADMIN
-- Body: `{ status: 'ACTIVE' | 'CLOSED' | 'ARCHIVED' }`
-- Cambia status de quiniela
-- Crea audit log para seguimiento
-
-**`src/app/admin/usuarios/page.tsx`** - Panel admin
-
-Nueva sección "Visibilidad de Quinielas":
-- Lista todas las quinielas
-- Switch ON/OFF por cada una
-- ON = `ACTIVE` (habilitada)
-- OFF = `ARCHIVED` (archivada)
-- Muestra evento, código de invitación, count de miembros
-
-**`src/app/quinielas/page.tsx`** - Listado de quinielas
-
-Modificado para:
-1. Usuarios regulares → no ven quinielas `ARCHIVED`
-2. Super admin → ve todas (incluso ARCHIVED)
-3. Código:
-   ```typescript
-   where: {
-     // Si no eres super admin, excluye ARCHIVED
-     ...(isSuperAdmin ? {} : { quiniela: { status: { not: 'ARCHIVED' } } }),
-   }
-   ```
-
-### Cómo Usar
-
-**Como super admin:**
-
-1. Ve a `/admin/usuarios`
-2. Scroll abajo → sección "Visibilidad de Quinielas"
-3. Ve lista de quinielas con switch:
-   ```
-   [ON]  Ki-Niela Mundial 2026      [Evento: FIFA World Cup 2026]
-   [OFF] Ki-Niela Amistosos...      [Evento: Amistosos Internacionales]
-   ```
-4. Click switch OFF para una quiniela → toggle a ARCHIVED
-   - Quiniela desaparece del listado público
-   - Usuarios existentes NO la ven en "Mis Quinielas"
-   - Usuarios NO pueden solicitar acceso
-5. Click switch ON → vuelve a ACTIVE
-   - Quiniela reaparece
-
-**Consecuencias de archivar:**
-- ❌ No aparece en `/quinielas` para usuarios regulares
-- ❌ No aparece en "Mis Quinielas" para usuarios regulares
-- ❌ No se puede solicitar acceso con código
-- ✅ Solo super admin la sigue viendo
-- ✅ Si eras miembro ANTES de archivarla → desaparece de tu lista (si eres usuario regular)
-
----
-
-## Configuración de SMTP en Railway
-
-### Requisito Crítico
-
-Para que los emails funcionen en producción, **DEBES actualizar Railway con 2 variables:**
-
-1. **SMTP_USER** (estaba vacío, debe ser `resend`)
-2. **ADMIN_NOTIFY_EMAIL** (nueva, apunta a tu correo real)
-
-### Pasos
-
-1. **Ve a Railway dashboard**: https://railway.app/dashboard
-2. **Selecciona proyecto "Ki-Niela"**
-3. **Ve a pestaña "Variables"**
-4. **Busca variable `SMTP_USER`**:
-   - Valor actual: (vacío)
-   - Cambiar a: `resend`
-   - Click "Save"
-5. **Busca variable `ADMIN_NOTIFY_EMAIL`** (probablemente no existe):
-   - Si no existe, click "Add Variable"
-   - Nombre: `ADMIN_NOTIFY_EMAIL`
-   - Valor: `daniel.cr031288@gmail.com`
-   - Click "Add"
-6. **Railway redeploya automáticamente** (~2-3 minutos)
-
-### Verificación
-
-Después de redeploy:
-
-1. **Registra nuevo usuario** en https://ki-niela-production.up.railway.app/register
-2. **Verifica tu Gmail** (`daniel.cr031288@gmail.com`):
-   - Deberías recibir email: "Se registró un nuevo usuario: [nombre]..."
-3. **Verifica email del usuario**:
-   - Deberías recibir email: "¡Bienvenido a Ki-Niela!..."
-
-Si NO recibes emails:
-- Verifica que ambas variables estén en Railway
-- Revisa logs de Railway para errores
-- Confirma que Resend API key sigue siendo válida
-
----
-
-## Cómo Probar Localmente
-
-### Setup Inicial
-
-**1. Clonar repo y instalar dependencias:**
-```bash
-cd /home/danielp/repo/app_KI-Niela
+cd app_KI-Niela
 npm install
-```
-
-**2. Base de datos local (si usas PostgreSQL local):**
-```bash
-# Si tienes BD local configurada en .env.local
-DATABASE_URL="postgresql://postgres:cisco1372@localhost:5432/bd_kiniela?schema=public"
-```
-
-**3. Generar Prisma Client:**
-```bash
 npx prisma generate
+cp .env.example .env.local   # editar con tus credenciales locales
+createdb bd_kiniela
+npx prisma migrate dev --name init
+npx prisma db seed
+npm run dev   # http://localhost:3001
 ```
 
-### Ejecutar Localmente
+### Troubleshooting
 
-**Dev server:**
-```bash
-npm run dev
-```
-Abre http://localhost:3001
+#### Emails no llegan en producción
+1. `GET /api/admin/diag/mailer` → revisar que `BREVO_API_KEY_set: true` y `transport: 'brevo-http-api'`.
+2. Brevo Security → IPs autorizadas → desactivar bloqueo para Claves API.
+3. Logs de Railway → buscar `[mailer:brevo-api]`.
+4. Spam folder.
 
-**Test emails (dev mode):**
+#### Predicciones no se guardan
+1. ¿El user es `ACTIVE` en la quiniela?
+2. ¿El partido sigue en `PROGRAMADO` (no `BLOQUEADO`)?
+3. DevTools → Network → ver el `POST /api/quinielas/:id/predictions/upsert`.
+4. ¿El `useAutosave` recibe `onSave`/`onBlur` estables? Si re-renderiza, los inputs pierden el debounce.
 
-En desarrollo, si faltan variables SMTP, los emails se loguean a consola:
+#### Bot no genera predicciones
+1. `Quiniela.randomPredictionsEnabled === true`
+2. `QuinielaMember.autoPredictionsEnabled === true` para ese user
+3. `QuinielaMember.status === 'ACTIVE'`
+4. No hay predicción previa para ese match
+5. Cron `/api/jobs/generate-random-predictions` está corriendo
 
-```bash
-SMTP_HOST=smtp.resend.com \
-SMTP_PORT=587 \
-SMTP_USER=resend \
-SMTP_PASS=re_SYtRLKLt_EJrP5uywBy4ZW8VCdrZaEFmY \
-SMTP_FROM="Ki-Niela" <onboarding@resend.dev> \
-ADMIN_NOTIFY_EMAIL=tu-correo@gmail.com \
-npm run dev
-```
+#### Posiciones vacío pero el dashboard dice "Posición 1"
+- Versión vieja: ya resuelto en §8. Si reaparece: revisar que ambos endpoints (`/leaderboard` y dashboard) excluyen `globalRole=SUPER_ADMIN` y agregan tail de members activos sin scores.
 
-Luego:
-1. Registra usuario
-2. Revisa terminal → ver logs de emails
+#### Auto-vincular no encuentra el partido
+- Confirmar que ESPN reporta los nombres tal como esperamos: `fixtures` lista local/visitante.
+- Agregar al alias group en `TEAM_ALIASES` (`src/app/admin/partidos/page.tsx`) si es un país nuevo.
+- Verificar que `normalize()` ya cubre el conector (`y`, `e`, `and`, `&`). Si aparece un nuevo separador (guión bajo, slash) extender el regex.
 
-**Seed amistosos:**
-```bash
-npx tsx scripts/seed-amistosos.ts
-```
-
-**Verificar cambios:**
-```bash
-git log --oneline -10
-```
+#### Partido finalizado pero los puntos no se actualizaron
+- `POST /api/jobs/recalculate-scores` con `x-cron-secret` y body `{}` recalcula todo. Con `{ "matchId": "..." }` recalcula solo uno.
 
 ---
 
-## Commits Relevantes
+## Commits relevantes (cronológicos)
 
-| Commit | Descripción |
-|--------|-------------|
-| `cb71b5b` | Agregar quiniela Amistosos + expandir flags |
-| `6c10d06` | Perfil de usuario + dropdown en header |
-| `5a0bfe1` | Fix responsive para móvil |
-| `e494ef7` | Emails automáticos con plantillas |
-| `6e85433` | Toggle visibilidad de quinielas |
-
----
-
-## Troubleshooting
-
-### Los emails no se envían en producción
-
-**Checklist:**
-1. ¿Están las variables en Railway?
-   - `SMTP_USER=resend` (no vacío)
-   - `ADMIN_NOTIFY_EMAIL=tu-correo@gmail.com`
-2. ¿Redeploy completó?
-   - Revisa Railway: debe estar "Success"
-3. ¿Resend API key es válida?
-   - Mira en code: `SMTP_PASS=re_...` (debe ser string válido)
-
-### Quiniela Amistosos no aparece
-
-**Checklist:**
-1. ¿Corriste seed-amistosos?
-   ```bash
-   npx tsx scripts/seed-amistosos.ts
-   ```
-2. ¿La quiniela está en ACTIVE status?
-   - Revisa DB: `SELECT * FROM "Quiniela" WHERE name LIKE '%Amistosos%'`
-3. ¿Tienes usuario ACTIVE?
-   - Para ver quinielas browseable debes estar ACTIVE globalmente
-
-### Perfil no funciona
-
-1. ¿Estás logueado? (ve a /login)
-2. ¿Ves avatar en header? (si no, refresh browser)
-3. ¿Hiciste click en avatar? (desktop: arriba derecha; mobile: hamburger)
-4. ¿Cambios se guardan? Revisa BD después de "Guardar datos"
-
----
-
-## Resumen Rápido
-
-| Feature | Estado | Ubicación |
-|---------|--------|-----------|
-| Amistosos 2026 | ✅ Implementado | `scripts/seed-amistosos.ts` |
-| Perfil de usuario | ✅ Implementado | `/perfil` |
-| Cambio contraseña | ✅ Implementado | `/perfil` → "Cambiar contraseña" |
-| Emails automáticos | ✅ Implementado | `src/lib/mailer-templates.ts` |
-| Toggle quinielas | ✅ Implementado | `/admin/usuarios` → "Visibilidad de Quinielas" |
-| Responsive mobile | ✅ Optimizado | `/perfil` |
-| Banderas nuevas | ✅ Expandidas | `src/lib/flags.ts` |
-
----
-
-## Contacto / Preguntas
-
-Si algo no está claro o no funciona:
-1. Revisa este documento
-2. Busca commit relevant en git log
-3. Lee los comentarios en código
-4. Abre issue en GitHub
-
-**Happy coding! ⚽**
+| Commit | Tema |
+|--------|------|
+| `cb71b5b` | Quiniela Amistosos + flags expandidas |
+| `6c10d06` | Perfil de usuario + dropdown header |
+| `e494ef7` | Plantillas de emails transaccionales |
+| `6e85433` | Switch visibilidad de quinielas |
+| `f58ed96` | SSE + polling adaptativo para live updates |
+| `f722775` | Switch live provider Sofascore → ESPN |
+| `b3daf03` | Matching difuso EN/ES/FIFA |
+| `a0e560f` | Toggle bot por participante |
+| `b4a206f` | Fix mapStatus ESPN para "EN_JUEGO" |
+| `ea0cbe1` | Editor inline de marcador manual |
+| `18e96ff` | Fix autosave: predicciones perdidas al cambiar de página |
+| `0b913a9` | Overlay full-screen al guardar |
+| `3e82b1b` | Fix spinner "Guardando…" pegado |
+| `238baf0` | Optimistic update en /admin/usuarios |
+| `b7e9aeb` | Endpoint diag/mailer |
+| `41f06a0` | Mailer Brevo HTTP API |
+| `397209f` | Posiciones: incluir admins de quiniela + normalize "y" |
+| `e7e3678` | Botón Desvincular siempre visible |
+| `7c8706b` | Fix Zod externalProvider:null al desvincular |
+| `72722c3` | Excluir SUPER_ADMIN del leaderboard y recalc |
