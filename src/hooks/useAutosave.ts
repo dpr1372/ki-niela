@@ -9,11 +9,12 @@ export function useAutosave(
   onSave?: (matchId: string, home: number, away: number) => void,
 ) {
   const [statusMap, setStatusMap] = useState<Record<string, SaveStatus>>({})
+  // Number of fetches currently in flight (debounced + sent but not yet
+  // resolved). When > 0 the parent shows a spinner overlay AND prevents
+  // closing the tab via beforeunload.
+  const [inFlight, setInFlight] = useState(0)
   const pending = useRef<Record<string, Pending>>({})
 
-  // Centralised "actually fire the request". Used by both the debounced save
-  // and by flushAll on unmount / navigation. sendBeacon is used for the
-  // navigation case so the browser doesn't cancel the request mid-flight.
   const fire = useCallback(
     async (matchId: string, home: number, away: number, useBeacon: boolean) => {
       const url = `/api/quinielas/${quinielaId}/predictions/upsert`
@@ -24,19 +25,18 @@ export function useAutosave(
       })
 
       if (useBeacon && typeof navigator !== 'undefined' && navigator.sendBeacon) {
-        // Beacon is fire-and-forget but guarantees the request goes out even
-        // mid-navigation. Server reads it like any other POST.
         const blob = new Blob([body], { type: 'application/json' })
         navigator.sendBeacon(url, blob)
         return
       }
 
+      setInFlight((n) => n + 1)
       try {
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body,
-          keepalive: true, // also helps if the tab is closing
+          keepalive: true,
         })
         const data = await res.json()
         if (!res.ok) {
@@ -51,6 +51,8 @@ export function useAutosave(
         onSave?.(matchId, home, away)
       } catch {
         setStatusMap((prev) => ({ ...prev, [matchId]: 'error' }))
+      } finally {
+        setInFlight((n) => Math.max(0, n - 1))
       }
     },
     [quinielaId, onSave],
@@ -73,7 +75,6 @@ export function useAutosave(
     [fire],
   )
 
-  // Force any pending writes to flush right now (used by parent on blur).
   const flush = useCallback(
     (matchId: string) => {
       const p = pending.current[matchId]
@@ -85,9 +86,13 @@ export function useAutosave(
     [fire],
   )
 
-  // On unmount or page hide, flush every pending write via sendBeacon so
-  // navigating to another tab doesn't drop in-flight predictions.
+  // beforeunload prompt is the last line of defence — beacon already covers
+  // the data side, but the prompt also lets the user notice they were about
+  // to navigate away mid-save.
   useEffect(() => {
+    const hasPending = () =>
+      Object.keys(pending.current).length > 0 || inFlight > 0
+
     const flushAll = (useBeacon: boolean) => {
       const entries = Object.entries(pending.current)
       pending.current = {}
@@ -97,14 +102,22 @@ export function useAutosave(
       }
     }
     const onPageHide = () => flushAll(true)
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      flushAll(true)
+      if (hasPending()) {
+        // Most browsers ignore the message string but show a generic prompt.
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
     window.addEventListener('pagehide', onPageHide)
-    window.addEventListener('beforeunload', onPageHide)
+    window.addEventListener('beforeunload', onBeforeUnload)
     return () => {
       window.removeEventListener('pagehide', onPageHide)
-      window.removeEventListener('beforeunload', onPageHide)
-      flushAll(true) // unmount (e.g. client-side navigation to another route)
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      flushAll(true)
     }
-  }, [fire])
+  }, [fire, inFlight])
 
-  return { save, flush, statusMap }
+  return { save, flush, statusMap, inFlight }
 }

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Image from 'next/image'
 import AppShell from '@/components/layout/AppShell'
 import { PredictionInput } from '@/components/quiniela/PredictionInput'
@@ -121,7 +121,15 @@ const PHASE_LABELS: Record<string, string> = {
 export default function PronosticosPage() {
   const params = useParams<{ quinielaId: string }>()
   const quinielaId = params.quinielaId
-  const { save, flush, statusMap } = useAutosave(quinielaId)
+  const queryClient = useQueryClient()
+  const { save, flush, statusMap, inFlight } = useAutosave(
+    quinielaId,
+    () => {
+      // Refetch predictions after every successful save so other tabs/sessions
+      // and the React state stay aligned with what's actually in the DB.
+      queryClient.invalidateQueries({ queryKey: ['pronosticos', quinielaId] })
+    },
+  )
   const stripRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading } = useQuery({
@@ -183,8 +191,24 @@ export default function PronosticosPage() {
     return `${WEEKDAY_FULL_ES[dt.getUTCDay()]}, ${d} de ${MONTH_FULL_ES[m - 1]}`
   })()
 
+  // Show overlay while a save is in-flight or while a debounced save is queued.
+  // This both signals progress and discourages the user from switching pages
+  // before the request lands.
+  const anyPendingSave = inFlight > 0 || Object.values(statusMap).some((s) => s === 'saving')
+
   return (
     <AppShell quinielaId={quinielaId}>
+      {anyPendingSave && (
+        <div
+          className="fixed top-3 right-3 z-50 flex items-center gap-2 rounded-full bg-blue-600 text-white text-xs font-semibold px-4 py-2 shadow-lg pointer-events-none"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+          Guardando marcador…
+        </div>
+      )}
+
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <BarChart2 className="text-blue-700" size={26} />
