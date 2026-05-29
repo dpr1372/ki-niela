@@ -16,6 +16,8 @@ import { sendMail } from '@/lib/mailer'
 
 function snapshot() {
   return {
+    BREVO_API_KEY_set: !!process.env.BREVO_API_KEY,
+    transport: process.env.BREVO_API_KEY ? 'brevo-http-api' : 'smtp',
     SMTP_HOST: process.env.SMTP_HOST ?? null,
     SMTP_PORT: process.env.SMTP_PORT ?? null,
     SMTP_USER_set: !!process.env.SMTP_USER,
