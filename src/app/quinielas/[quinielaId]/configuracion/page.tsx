@@ -38,10 +38,10 @@ const PHASE_LABEL: Record<string, string> = {
 
 const configSchema = z.object({
   name: z.string().min(1),
-  lockMinutesBeforeMatch: z.number().int().min(0).max(120),
+  lockMinutesBeforeMatch: z.coerce.number().int().min(0).max(120),
   randomPredictionsEnabled: z.boolean(),
-  randomMinGoals: z.number().int().min(0).max(20),
-  randomMaxGoals: z.number().int().min(0).max(20),
+  randomMinGoals: z.coerce.number().int().min(0).max(20),
+  randomMaxGoals: z.coerce.number().int().min(0).max(20),
 })
 type ConfigForm = z.infer<typeof configSchema>
 
@@ -186,7 +186,12 @@ export default function ConfiguracionPage() {
       <div className="space-y-8 max-w-3xl">
         <h1 className="text-3xl font-black text-pitch-dark">⚙️ Configuración</h1>
 
-        <form onSubmit={handleSubmit((v: ConfigForm) => saveConfig.mutate(v))} className="space-y-6">
+        <form onSubmit={handleSubmit((v) => saveConfig.mutate({
+          ...v,
+          lockMinutesBeforeMatch: Number(v.lockMinutesBeforeMatch),
+          randomMinGoals: Number(v.randomMinGoals),
+          randomMaxGoals: Number(v.randomMaxGoals),
+        }))} className="space-y-6">
           <div className="card-pitch rounded-xl p-5 space-y-4">
             <h2 className="font-semibold text-gray-700">General</h2>
             <div>
