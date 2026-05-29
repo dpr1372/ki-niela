@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { sendQuinielaAccessRequestToAdmin } from '@/lib/mailer-templates'
 
 export async function POST(
   _req: NextRequest,
@@ -20,7 +21,7 @@ export async function POST(
   const { quinielaId } = await params
   const quiniela = await prisma.quiniela.findUnique({
     where: { id: quinielaId },
-    select: { id: true, status: true },
+    select: { id: true, name: true, status: true },
   })
   if (!quiniela) return NextResponse.json({ error: 'Quiniela no encontrada' }, { status: 404 })
   if (quiniela.status !== 'ACTIVE') {
@@ -42,7 +43,25 @@ export async function POST(
       status: 'PENDING_APPROVAL',
       autoPredictionsEnabled: true,
     },
+    include: { user: { select: { name: true, email: true } } },
   })
+
+  // Notify all admins of this quiniela
+  const admins = await prisma.quinielaMember.findMany({
+    where: { quinielaId, role: 'QUINIELA_ADMIN', status: 'ACTIVE' },
+    include: { user: { select: { email: true } } },
+  })
+  await Promise.allSettled(
+    admins.map((a) =>
+      sendQuinielaAccessRequestToAdmin({
+        adminEmail: a.user.email,
+        userName: member.user.name,
+        userEmail: member.user.email,
+        quinielaName: quiniela.name,
+        quinielaId: quiniela.id,
+      })
+    )
+  )
 
   return NextResponse.json({ member, message: 'Solicitud enviada. Espera la aprobación del administrador.' })
 }

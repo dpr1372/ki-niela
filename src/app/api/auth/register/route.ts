@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { hashSync } from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
+import { sendNewUserRegisteredToAdmin, sendWelcomeToNewUser } from '@/lib/mailer-templates'
 
 const registerSchema = z.object({
   name: z.string().min(2).max(80),
@@ -30,6 +31,12 @@ export async function POST(req: NextRequest) {
     data: { name, email, passwordHash, globalRole: 'USER', status: 'INACTIVE' },
     select: { id: true, name: true, email: true, globalRole: true },
   })
+
+  // Fire emails in parallel — don't block the registration response if mailing fails
+  await Promise.allSettled([
+    sendWelcomeToNewUser({ userName: user.name, userEmail: user.email }),
+    sendNewUserRegisteredToAdmin({ userName: user.name, userEmail: user.email }),
+  ])
 
   return NextResponse.json(
     {

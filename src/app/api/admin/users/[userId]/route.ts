@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { sendUserActivatedGlobally } from '@/lib/mailer-templates'
 
 const patchSchema = z.object({
   action: z.enum(['activate', 'deactivate']).optional(),
@@ -41,11 +42,22 @@ export async function PATCH(
     return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 })
   }
 
+  const previous = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { status: true },
+  })
+
   const user = await prisma.user.update({
     where: { id: userId },
     data,
     select: { id: true, name: true, email: true, status: true, globalRole: true },
   })
+
+  // Send activation email if user was just activated (transition from non-active → ACTIVE)
+  if (parsed.data.action === 'activate' && previous?.status !== 'ACTIVE') {
+    await sendUserActivatedGlobally({ userName: user.name, userEmail: user.email })
+      .catch((e) => console.error('[admin/users] activation email failed:', e))
+  }
 
   return NextResponse.json(user)
 }

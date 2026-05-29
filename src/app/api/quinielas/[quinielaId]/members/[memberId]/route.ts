@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { getMemberContext, isAdminOf } from '@/lib/quiniela-auth'
+import { sendQuinielaAccessApproved } from '@/lib/mailer-templates'
 import { z } from 'zod'
 
 const patchSchema = z.object({
@@ -71,6 +72,22 @@ export async function PATCH(
         newValue: { status: member.status, role: member.role },
       },
     })
+  }
+
+  // Send approval email if user was just activated (transition from non-active → ACTIVE)
+  if (action === 'activate' && existing.status !== 'ACTIVE') {
+    const quiniela = await prisma.quiniela.findUnique({
+      where: { id: quinielaId },
+      select: { name: true },
+    })
+    if (quiniela) {
+      sendQuinielaAccessApproved({
+        userName: member.user.name,
+        userEmail: member.user.email,
+        quinielaName: quiniela.name,
+        quinielaId,
+      }).catch((e) => console.error('[members] approval email failed:', e))
+    }
   }
 
   const toastMap: Record<string, string> = {
