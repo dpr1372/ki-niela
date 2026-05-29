@@ -24,8 +24,12 @@ function getTransporter(): nodemailer.Transporter | null {
   transporter = nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,
+    secure: port === 465,        // true only for port 465 (SSL), false for 587 (STARTTLS)
+    requireTLS: port === 587,    // force STARTTLS upgrade on port 587
     auth: { user, pass },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   })
   return transporter
 }
