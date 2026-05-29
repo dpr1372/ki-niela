@@ -84,19 +84,20 @@ export default function PerfilPage() {
 
   return (
     <AppShell>
-      <div className="space-y-8 max-w-lg">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-blue-950 text-yellow-300 font-black text-2xl flex items-center justify-center shadow-md">
+      <div className="space-y-6 w-full max-w-lg mx-auto px-0 sm:px-0 pb-24 sm:pb-6">
+        {/* Header perfil */}
+        <div className="flex items-center gap-4 pt-2">
+          <div className="w-14 h-14 shrink-0 rounded-full bg-blue-950 text-yellow-300 font-black text-2xl flex items-center justify-center shadow-md">
             {initials}
           </div>
-          <div>
-            <h1 className="text-2xl font-black text-pitch-dark">Mi Perfil</h1>
-            <p className="text-sm text-gray-500">{session?.user?.email}</p>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-black text-pitch-dark leading-tight">Mi Perfil</h1>
+            <p className="text-sm text-gray-500 truncate">{session?.user?.email}</p>
           </div>
         </div>
 
         {/* Datos personales */}
-        <div className="card-pitch rounded-xl p-5 space-y-4">
+        <div className="card-pitch rounded-xl p-4 sm:p-5 space-y-4">
           <h2 className="font-semibold text-gray-700 flex items-center gap-2">
             <User size={16} />
             Datos personales
@@ -104,29 +105,38 @@ export default function PerfilPage() {
           <form onSubmit={profileForm.handleSubmit(onSaveProfile)} className="space-y-4">
             <div>
               <Label htmlFor="name">Nombre</Label>
-              <Input id="name" {...profileForm.register('name')} className="mt-1" />
+              <Input
+                id="name"
+                autoComplete="name"
+                {...profileForm.register('name')}
+                className="mt-1 h-11 text-base"
+              />
               {profileForm.formState.errors.name && (
                 <p className="text-xs text-red-500 mt-1">{profileForm.formState.errors.name.message}</p>
               )}
             </div>
             <div>
-              <Label htmlFor="email">
-                <Mail size={13} className="inline mr-1" />
-                Correo electrónico
-              </Label>
-              <Input id="email" type="email" {...profileForm.register('email')} className="mt-1" />
+              <Label htmlFor="email">Correo electrónico</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                {...profileForm.register('email')}
+                className="mt-1 h-11 text-base"
+              />
               {profileForm.formState.errors.email && (
                 <p className="text-xs text-red-500 mt-1">{profileForm.formState.errors.email.message}</p>
               )}
             </div>
-            <Button type="submit" disabled={savingProfile} className="w-full">
+            <Button type="submit" disabled={savingProfile} className="w-full h-11 text-base">
               {savingProfile ? 'Guardando...' : 'Guardar datos'}
             </Button>
           </form>
         </div>
 
         {/* Cambiar contraseña */}
-        <div className="card-pitch rounded-xl p-5 space-y-4">
+        <div className="card-pitch rounded-xl p-4 sm:p-5 space-y-4">
           <h2 className="font-semibold text-gray-700 flex items-center gap-2">
             <Lock size={16} />
             Cambiar contraseña
@@ -134,26 +144,44 @@ export default function PerfilPage() {
           <form onSubmit={passwordForm.handleSubmit(onSavePassword)} className="space-y-4">
             <div>
               <Label htmlFor="currentPassword">Contraseña actual</Label>
-              <Input id="currentPassword" type="password" {...passwordForm.register('currentPassword')} className="mt-1" />
+              <Input
+                id="currentPassword"
+                type="password"
+                autoComplete="current-password"
+                {...passwordForm.register('currentPassword')}
+                className="mt-1 h-11 text-base"
+              />
               {passwordForm.formState.errors.currentPassword && (
                 <p className="text-xs text-red-500 mt-1">{passwordForm.formState.errors.currentPassword.message}</p>
               )}
             </div>
             <div>
               <Label htmlFor="newPassword">Nueva contraseña</Label>
-              <Input id="newPassword" type="password" {...passwordForm.register('newPassword')} className="mt-1" />
+              <Input
+                id="newPassword"
+                type="password"
+                autoComplete="new-password"
+                {...passwordForm.register('newPassword')}
+                className="mt-1 h-11 text-base"
+              />
               {passwordForm.formState.errors.newPassword && (
                 <p className="text-xs text-red-500 mt-1">{passwordForm.formState.errors.newPassword.message}</p>
               )}
             </div>
             <div>
               <Label htmlFor="confirmPassword">Confirmar nueva contraseña</Label>
-              <Input id="confirmPassword" type="password" {...passwordForm.register('confirmPassword')} className="mt-1" />
+              <Input
+                id="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                {...passwordForm.register('confirmPassword')}
+                className="mt-1 h-11 text-base"
+              />
               {passwordForm.formState.errors.confirmPassword && (
                 <p className="text-xs text-red-500 mt-1">{passwordForm.formState.errors.confirmPassword.message}</p>
               )}
             </div>
-            <Button type="submit" disabled={savingPassword} className="w-full">
+            <Button type="submit" disabled={savingPassword} className="w-full h-11 text-base">
               {savingPassword ? 'Guardando...' : 'Cambiar contraseña'}
             </Button>
           </form>
