@@ -18,8 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { fetchFixtures, providerName } from '@/lib/live-providers'
-import { mapStatus as mapSofaStatus } from '@/lib/live-providers/sofascore'
+import { fetchFixtures, mapStatus, providerName } from '@/lib/live-providers'
 import { calculateScore } from '@/lib/scoring'
 
 const ACTIVE_STATUSES = ['BLOQUEADO', 'EN_JUEGO', 'MEDIO_TIEMPO', 'TIEMPO_EXTRA', 'PENALES'] as const
@@ -78,7 +77,7 @@ export async function POST(req: NextRequest) {
     const fixture = fixturesById.get(match.externalId!)
     if (!fixture) continue
 
-    const newStatus = mapSofaStatus(fixture.status)
+    const newStatus = mapStatus(fixture.status)
     if (!newStatus) continue
     if (fixture.homeGoals === null || fixture.awayGoals === null) continue
 
