@@ -4,8 +4,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { Home, Trophy, BarChart2, Settings, LogOut, Menu, X, CalendarDays, Swords, Radio, Users, ShieldCheck } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Home, Trophy, BarChart2, Settings, LogOut, Menu, X, CalendarDays, Swords, Radio, Users, ShieldCheck, UserCircle, ChevronDown } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 
@@ -18,7 +18,19 @@ type Props = {
 export default function AppShell({ children, quinielaId, quinielaName }: Props) {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [quinielaAdminRole, setQuinielaAdminRole] = useState(false)
+  const profileRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
   const { data: session } = useSession()
   const isSuperAdmin = session?.user?.globalRole === 'SUPER_ADMIN'
 
@@ -88,21 +100,49 @@ export default function AppShell({ children, quinielaId, quinielaName }: Props) 
             </span>
           )}
           <div className="flex items-center gap-3">
+            {/* Avatar dropdown (desktop) */}
             {session?.user && (
-              <span className="hidden sm:flex items-center gap-2 text-xs text-blue-900">
-                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-950 text-yellow-300 font-bold text-[11px]">
-                  {(session.user.name ?? session.user.email ?? '?').slice(0, 1).toUpperCase()}
-                </span>
-                <span className="font-semibold truncate max-w-[160px]">
-                  {session.user.name ?? session.user.email}
-                </span>
-                {isSuperAdmin && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-400 text-blue-950 font-bold uppercase tracking-wide">
-                    Admin
+              <div className="relative hidden sm:block" ref={profileRef}>
+                <button
+                  onClick={() => setProfileOpen(!profileOpen)}
+                  className="flex items-center gap-2 text-xs text-blue-900 hover:bg-blue-100 rounded-lg px-2 py-1 transition-colors"
+                >
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-950 text-yellow-300 font-bold text-[11px]">
+                    {(session.user.name ?? session.user.email ?? '?').slice(0, 1).toUpperCase()}
                   </span>
+                  <span className="font-semibold truncate max-w-[140px]">
+                    {session.user.name ?? session.user.email}
+                  </span>
+                  {isSuperAdmin && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-400 text-blue-950 font-bold uppercase tracking-wide">
+                      Admin
+                    </span>
+                  )}
+                  <ChevronDown size={14} className={`transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {profileOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                    <Link
+                      href="/perfil"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <UserCircle size={15} />
+                      Mi perfil
+                    </Link>
+                    <hr className="my-1 border-gray-100" />
+                    <button
+                      onClick={() => signOut({ callbackUrl: '/login' })}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+                    >
+                      <LogOut size={15} />
+                      Cerrar sesión
+                    </button>
+                  </div>
                 )}
-              </span>
+              </div>
             )}
+            {/* Mobile hamburger */}
             <Button
               variant="ghost"
               size="icon"
@@ -111,15 +151,6 @@ export default function AppShell({ children, quinielaId, quinielaName }: Props) 
               aria-label="Menú"
             >
               {menuOpen ? <X size={20} /> : <Menu size={20} />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-blue-950 hover:bg-blue-100 hidden sm:flex"
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              aria-label="Cerrar sesión"
-            >
-              <LogOut size={18} />
             </Button>
           </div>
         </div>
@@ -155,9 +186,17 @@ export default function AppShell({ children, quinielaId, quinielaName }: Props) 
                 {label}
               </Link>
             ))}
+            <Link
+              href="/perfil"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 text-sm font-medium px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 mt-auto"
+            >
+              <UserCircle size={18} />
+              Mi perfil
+            </Link>
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
-              className="flex items-center gap-3 text-sm font-medium px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 mt-auto"
+              className="flex items-center gap-3 text-sm font-medium px-3 py-2 rounded-lg text-red-600 hover:bg-red-50"
             >
               <LogOut size={18} />
               Cerrar sesión
