@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer'
 
 let transporter: nodemailer.Transporter | null = null
+let configReason: string | null = null
 
 function getTransporter(): nodemailer.Transporter | null {
   if (transporter) return transporter
@@ -10,7 +11,13 @@ function getTransporter(): nodemailer.Transporter | null {
   const user = process.env.SMTP_USER
   const pass = process.env.SMTP_PASS
 
-  if (!host || !port || !user || !pass) {
+  const missing: string[] = []
+  if (!host) missing.push('SMTP_HOST')
+  if (!port) missing.push('SMTP_PORT')
+  if (!user) missing.push('SMTP_USER')
+  if (!pass) missing.push('SMTP_PASS')
+  if (missing.length > 0) {
+    configReason = `Faltan variables: ${missing.join(', ')}`
     return null
   }
 
@@ -30,19 +37,30 @@ export type MailMessage = {
   text?: string
 }
 
-export async function sendMail(msg: MailMessage): Promise<{ ok: true } | { ok: false; reason: string }> {
+export type SendResult = { ok: true; messageId?: string } | { ok: false; reason: string }
+
+export async function sendMail(msg: MailMessage): Promise<SendResult> {
   const t = getTransporter()
   if (!t) {
-    // Dev fallback: log to console so the app remains functional without SMTP configured.
-    console.log(`[mailer:dev] To=${msg.to} Subject=${msg.subject}`)
-    console.log(msg.text ?? msg.html)
-    return { ok: false, reason: 'SMTP not configured (logged to console)' }
+    const reason = configReason ?? 'SMTP no configurado'
+    console.warn(`[mailer] SKIPPING send to ${msg.to} — ${reason}`)
+    console.warn(`[mailer] Subject: ${msg.subject}`)
+    return { ok: false, reason }
   }
   const from = process.env.SMTP_FROM ?? '"Ki-Niela" <noreply@kiniela.local>'
   try {
-    await t.sendMail({ from, to: msg.to, subject: msg.subject, html: msg.html, text: msg.text })
-    return { ok: true }
+    const info = await t.sendMail({
+      from,
+      to: msg.to,
+      subject: msg.subject,
+      html: msg.html,
+      text: msg.text,
+    })
+    console.log(`[mailer] sent to=${msg.to} id=${info.messageId} subject="${msg.subject}"`)
+    return { ok: true, messageId: info.messageId }
   } catch (e) {
-    return { ok: false, reason: e instanceof Error ? e.message : 'send error' }
+    const reason = e instanceof Error ? e.message : 'send error'
+    console.error(`[mailer] FAILED to=${msg.to} reason=${reason}`)
+    return { ok: false, reason }
   }
 }
