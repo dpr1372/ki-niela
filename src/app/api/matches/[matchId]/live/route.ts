@@ -47,6 +47,9 @@ export async function PATCH(
       liveAwayGoals,
       status,
       liveUpdatedAt: new Date(),
+      // Manual update from admin always wins over automatic sync afterwards.
+      liveSource: 'ADMIN_MANUAL',
+      manualOverride: true,
       ...(isFinal
         ? {
             officialHomeGoals: liveHomeGoals,

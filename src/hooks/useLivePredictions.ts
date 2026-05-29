@@ -45,6 +45,8 @@ export type LiveMatch = {
   officialHomeGoals: number | null
   officialAwayGoals: number | null
   liveUpdatedAt: string | null
+  liveSource?: 'NONE' | 'API_AUTO' | 'ADMIN_MANUAL'
+  manualOverride?: boolean
   profiles: LiveProfile[]
 }
 

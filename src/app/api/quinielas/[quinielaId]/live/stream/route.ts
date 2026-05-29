@@ -130,6 +130,8 @@ async function getLiveSnapshot(quinielaId: string, userId: string) {
         officialHomeGoals: m.officialHomeGoals,
         officialAwayGoals: m.officialAwayGoals,
         liveUpdatedAt: m.liveUpdatedAt,
+        liveSource: m.liveSource,
+        manualOverride: m.manualOverride,
         profiles: profiles.sort((a, b) => (b.livePoints ?? -1) - (a.livePoints ?? -1)),
       }
     }),
@@ -142,7 +144,7 @@ function hashSnapshot(snap: Awaited<ReturnType<typeof getLiveSnapshot>>): string
   return snap.matches
     .map(
       (m) =>
-        `${m.id}:${m.status}:${m.liveHomeGoals}:${m.liveAwayGoals}:${m.officialHomeGoals}:${m.officialAwayGoals}:${m.liveUpdatedAt?.toString() ?? ''}`,
+        `${m.id}:${m.status}:${m.liveHomeGoals}:${m.liveAwayGoals}:${m.officialHomeGoals}:${m.officialAwayGoals}:${m.liveUpdatedAt?.toString() ?? ''}:${m.liveSource}`,
     )
     .join('|')
 }

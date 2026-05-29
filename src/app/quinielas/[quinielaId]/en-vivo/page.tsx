@@ -6,7 +6,7 @@ import Image from 'next/image'
 import AppShell from '@/components/layout/AppShell'
 import { MatchStatusBadge } from '@/components/quiniela/MatchStatusBadge'
 import { flagUrl } from '@/lib/flags'
-import { Star, Bot, User, Trophy, Radio, Wifi, WifiOff } from 'lucide-react'
+import { Star, Bot, User, Trophy, Radio, Wifi, WifiOff, Zap, UserCog } from 'lucide-react'
 import { BallLoader } from '@/components/ui/BallLoader'
 import { useLivePredictions, type LiveMatch, type LiveProfile as Profile } from '@/hooks/useLivePredictions'
 
@@ -117,7 +117,25 @@ function LiveMatchCard({ match }: { match: LiveMatch }) {
           <span className="font-bold">{PHASE_LABEL[match.phase] ?? match.phase}</span>
           {match.matchday?.name && <span className="text-blue-100">· {match.matchday.name}</span>}
         </div>
-        <MatchStatusBadge status={match.status} />
+        <div className="flex items-center gap-1.5">
+          {match.liveSource === 'API_AUTO' && (
+            <span
+              title="Marcador automático en vivo"
+              className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-emerald-400/30 text-emerald-100 px-1.5 py-0.5 rounded"
+            >
+              <Zap size={9} className="fill-emerald-200 text-emerald-200" /> AUTO
+            </span>
+          )}
+          {match.liveSource === 'ADMIN_MANUAL' && (
+            <span
+              title="Marcador escrito manualmente por admin"
+              className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-amber-400/30 text-amber-100 px-1.5 py-0.5 rounded"
+            >
+              <UserCog size={9} /> MANUAL
+            </span>
+          )}
+          <MatchStatusBadge status={match.status} />
+        </div>
       </div>
 
       <div className="px-4 py-4 bg-gradient-to-b from-gray-50 to-white">

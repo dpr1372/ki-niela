@@ -129,6 +129,8 @@ export async function GET(
         officialHomeGoals: m.officialHomeGoals,
         officialAwayGoals: m.officialAwayGoals,
         liveUpdatedAt: m.liveUpdatedAt,
+        liveSource: m.liveSource,
+        manualOverride: m.manualOverride,
         profiles: profiles.sort((a, b) => (b.livePoints ?? -1) - (a.livePoints ?? -1)),
       }
     })

@@ -65,6 +65,12 @@ enum MatchStatus {
   CANCELADO
 }
 
+enum LiveSource {
+  NONE          // No live data captured yet
+  API_AUTO      // Came from external sports API
+  ADMIN_MANUAL  // Admin overrode manually
+}
+
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 model User {
@@ -224,6 +230,12 @@ model Match {
   liveUpdatedAt        DateTime?
   resultConfirmedAt    DateTime?
   prelockNotifiedAt    DateTime?
+  // External provider integration (API-Football)
+  externalId           String?     @unique  // Provider fixture id
+  externalProvider     String?              // e.g. "api-football"
+  liveSource           LiveSource  @default(NONE)
+  manualOverride       Boolean     @default(false) // If true, ignore API updates
+  lastSyncAt           DateTime?
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
