@@ -373,7 +373,14 @@ export default function AdminPartidosPage() {
     const res = await fetch(`/api/admin/matches/${matchId}/external`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ externalId, externalProvider: externalId ? fixturesProvider : null }),
+      // Solo mandamos externalProvider cuando vinculamos. El endpoint lo
+      // pone null automaticamente cuando externalId === null (Zod rechaza
+      // externalProvider: null porque el schema lo declara solo como string).
+      body: JSON.stringify(
+        externalId
+          ? { externalId, externalProvider: fixturesProvider }
+          : { externalId: null },
+      ),
     })
     if (!res.ok) {
       const info = await res.json().catch(() => null)
