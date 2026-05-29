@@ -200,12 +200,20 @@ export default function PronosticosPage() {
     <AppShell quinielaId={quinielaId}>
       {anyPendingSave && (
         <div
-          className="fixed top-3 right-3 z-50 flex items-center gap-2 rounded-full bg-blue-600 text-white text-xs font-semibold px-4 py-2 shadow-lg pointer-events-none"
+          className="fixed top-3 right-3 z-50 flex items-center gap-3 rounded-2xl bg-white shadow-xl ring-1 ring-blue-200 px-4 py-2 pointer-events-none"
           role="status"
           aria-live="polite"
         >
-          <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-          Guardando marcador…
+          <Image
+            src="/balon.svg"
+            alt=""
+            width={26}
+            height={26}
+            priority
+            className="ball-spin ball-bounce select-none"
+            draggable={false}
+          />
+          <span className="text-xs font-semibold text-blue-900">Guardando marcador…</span>
         </div>
       )}
 
