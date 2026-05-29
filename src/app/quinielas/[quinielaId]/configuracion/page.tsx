@@ -120,7 +120,7 @@ export default function ConfiguracionPage() {
     defaultValues: {
       name: '',
       lockMinutesBeforeMatch: 10,
-      randomPredictionsEnabled: true,
+      randomPredictionsEnabled: false,
       randomMinGoals: 0,
       randomMaxGoals: 7,
     },
