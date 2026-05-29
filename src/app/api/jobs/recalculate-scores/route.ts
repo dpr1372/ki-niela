@@ -27,11 +27,33 @@ export async function POST(req: NextRequest) {
     },
   })
 
+  // Cleanup any pre-existing Score rows that belong to SUPER_ADMIN globals,
+  // so the leaderboard reflects competitors only. (Earlier runs of the job
+  // could have created them when admins also predicted.)
+  const adminUsers = await prisma.user.findMany({
+    where: { globalRole: 'SUPER_ADMIN' },
+    select: { id: true },
+  })
+  const adminIds = adminUsers.map((u) => u.id)
+  let prunedAdmin = 0
+  if (adminIds.length > 0) {
+    const del = await prisma.score.deleteMany({
+      where: { userId: { in: adminIds } },
+    })
+    prunedAdmin = del.count
+  }
+
   let recalculated = 0
 
   for (const match of matches) {
+    // Skip SUPER_ADMIN globals — they are not competitors and must not get
+    // Score rows. The leaderboard/dashboard already filter them out, but
+    // pruning here keeps the data clean (no orphan zero-point rows).
     const predictions = await prisma.prediction.findMany({
-      where: { matchId: match.id },
+      where: {
+        matchId: match.id,
+        user: { globalRole: { not: 'SUPER_ADMIN' } },
+      },
       select: { id: true, quinielaId: true, userId: true, predictedHomeGoals: true, predictedAwayGoals: true },
     })
 
@@ -75,5 +97,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ recalculated })
+  return NextResponse.json({ recalculated, prunedAdmin })
 }

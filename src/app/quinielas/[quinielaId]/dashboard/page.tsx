@@ -91,12 +91,17 @@ export default async function DashboardPage({
       where: { quinielaId, userId: session.user.id },
       _sum: { points: true },
     }),
-    // Mirror the /leaderboard endpoint: rank only ACTIVE members and include
-    // every active member (even those with zero scored matches) so the user's
-    // position reflects what they'll see on the Posiciones page.
+    // Mirror the /leaderboard endpoint: rank only ACTIVE members, exclude
+    // SUPER_ADMIN globals (they are not competitors), and include every active
+    // member (even those with zero scored matches) so the user's position
+    // reflects what they'll see on the Posiciones page.
     (async () => {
       const activeMembers = await prisma.quinielaMember.findMany({
-        where: { quinielaId, status: 'ACTIVE' },
+        where: {
+          quinielaId,
+          status: 'ACTIVE',
+          user: { globalRole: { not: 'SUPER_ADMIN' } },
+        },
         select: { userId: true },
       })
       const activeUserIds = activeMembers.map((m) => m.userId)

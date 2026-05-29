@@ -45,11 +45,15 @@ export async function GET(
     whereScore.matchId = { in: matchIds.map((m) => m.id) }
   }
 
-  // Include every ACTIVE member regardless of role — admins who play also
-  // accumulate points and must appear in the table. The dashboard's "Posición"
-  // card uses the same criterion so both views stay consistent.
+  // Include every ACTIVE member regardless of quiniela role (a QUINIELA_ADMIN
+  // who plays also accumulates points). But exclude SUPER_ADMIN globals — the
+  // platform admin is not a competitor and must not show up on the leaderboard.
   const activeMembers = await prisma.quinielaMember.findMany({
-    where: { quinielaId, status: 'ACTIVE' },
+    where: {
+      quinielaId,
+      status: 'ACTIVE',
+      user: { globalRole: { not: 'SUPER_ADMIN' } },
+    },
     select: { userId: true },
   })
   const activeUserIds = activeMembers.map((m) => m.userId)
