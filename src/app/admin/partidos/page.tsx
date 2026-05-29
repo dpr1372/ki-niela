@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { BallLoader } from '@/components/ui/BallLoader'
-import { Search, Link2, Unlink, Zap, UserCog, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { Search, Link2, Unlink, Zap, UserCog, RefreshCw, CheckCircle2, Trash2 } from 'lucide-react'
 
 type Match = {
   id: string
@@ -158,6 +158,7 @@ export default function AdminPartidosPage() {
   const [searchDate, setSearchDate] = useState<string>('')
   const [searchTournament, setSearchTournament] = useState<string>('')
   const [fixtures, setFixtures] = useState<Fixture[]>([])
+  const [fixturesProvider, setFixturesProvider] = useState<string>('espn')
   const [searching, setSearching] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState<string>('')
@@ -206,6 +207,7 @@ export default function AdminPartidosPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error ?? 'Error consultando proveedor')
       setFixtures(json.fixtures ?? [])
+      setFixturesProvider(json.provider ?? 'espn')
       toast.success(`${json.count} fixtures encontrados (provider: ${json.provider}).`)
     } catch (e) {
       toast.error((e as Error).message)
@@ -219,7 +221,7 @@ export default function AdminPartidosPage() {
     const res = await fetch(`/api/admin/matches/${matchId}/external`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ externalId }),
+      body: JSON.stringify({ externalId, externalProvider: externalId ? fixturesProvider : null }),
     })
     if (!res.ok) {
       const info = await res.json().catch(() => null)
@@ -268,12 +270,30 @@ export default function AdminPartidosPage() {
       const res = await fetch(`/api/admin/matches/${match.id}/external`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ externalId: fixture.id }),
+        body: JSON.stringify({ externalId: fixture.id, externalProvider: fixturesProvider }),
       })
       if (res.ok) matched++
     }
 
     toast.success(`${matched} de ${visible.length} partidos vinculados.`)
+    await loadMatches()
+  }
+
+  async function clearAllLinks() {
+    if (!confirm('¿Borrar TODOS los external IDs vinculados? Útil si cambiaste de proveedor (ej. Sofascore → ESPN). Tendrás que re-vincular cada partido.')) {
+      return
+    }
+    const res = await fetch('/api/admin/matches/clear-external', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) {
+      toast.error('Error al limpiar enlaces.')
+      return
+    }
+    const json = await res.json()
+    toast.success(`${json.cleared} enlaces borrados.`)
     await loadMatches()
   }
 
@@ -426,6 +446,15 @@ export default function AdminPartidosPage() {
               <Button size="sm" variant="outline" onClick={runSync} disabled={syncing}>
                 <Zap size={14} /> {syncing ? 'Sync…' : 'Test sync'}
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={clearAllLinks}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                title="Borra TODOS los external IDs (útil al cambiar de proveedor)"
+              >
+                <Trash2 size={14} /> Limpiar IDs
+              </Button>
             </div>
           </div>
 
@@ -496,7 +525,17 @@ export default function AdminPartidosPage() {
                             </div>
                           ) : linked ? (
                             <div className="flex items-center gap-1">
-                              <span className="font-mono text-blue-700">{m.externalId}</span>
+                              <span
+                                className="font-mono text-blue-700 max-w-[140px] truncate"
+                                title={m.externalId ?? ''}
+                              >
+                                {m.externalId}
+                              </span>
+                              {m.externalProvider && (
+                                <span className="text-[9px] text-gray-400 font-bold uppercase">
+                                  {m.externalProvider.replace('api-football', 'AF').slice(0, 6)}
+                                </span>
+                              )}
                               <button
                                 onClick={() => { setEditingId(m.id); setEditingValue(m.externalId ?? '') }}
                                 className="text-[10px] text-gray-500 hover:text-blue-700"
