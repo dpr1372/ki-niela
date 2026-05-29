@@ -105,9 +105,13 @@ function parseEvent(e: EspnEvent, leagueSlug: string, leagueName?: string): Live
   const homeGoals = home?.score !== undefined ? Number(home.score) : null
   const awayGoals = away?.score !== undefined ? Number(away.score) : null
 
+  // Encode "state|detail" so mapStatus can distinguish "in/41'" from "pre/Fri at 12:00".
+  // detail alone (e.g. "41'") is ambiguous — only the state field tells us live vs scheduled.
+  const composedStatus = state ? `${state}|${detail}` : (detail || '')
+
   return {
     externalId: `${leagueSlug}|${e.id}`,
-    status: detail || state || '',
+    status: composedStatus,
     homeGoals: Number.isFinite(homeGoals) ? homeGoals : null,
     awayGoals: Number.isFinite(awayGoals) ? awayGoals : null,
     penaltyHomeGoals: home?.shootoutScore ?? null,
@@ -252,7 +256,15 @@ export function mapStatus(
   let detail: string | undefined
 
   if (typeof status === 'string') {
-    detail = status
+    // We may receive either a raw description ("Halftime", "FT") or the
+    // "state|detail" form produced by parseEvent (e.g. "in|41'").
+    if (status.includes('|')) {
+      const [s, d] = status.split('|', 2)
+      state = s
+      detail = d
+    } else {
+      detail = status
+    }
   } else {
     state = status.type?.state
     detail = status.type?.detail ?? status.type?.description
@@ -260,18 +272,19 @@ export function mapStatus(
 
   const det = (detail ?? '').toLowerCase()
 
-  if (state === 'post' || det.includes('full time') || det.includes('ft') || det.includes('finished')) {
-    return 'FINALIZADO'
-  }
-  if (det.includes('postpone')) return 'POSTERGADO'
-  if (det.includes('cancel')) return 'CANCELADO'
-
+  // In-progress states first — order matters because "halftime" contains "ft".
   if (state === 'in') {
-    if (det.includes('halftime') || det.includes('half-time') || det.includes('ht')) return 'MEDIO_TIEMPO'
+    if (det.includes('halftime') || det.includes('half-time') || /\bht\b/.test(det)) return 'MEDIO_TIEMPO'
     if (det.includes('extra')) return 'TIEMPO_EXTRA'
     if (det.includes('penalt') || det.includes('shootout')) return 'PENALES'
     return 'EN_JUEGO'
   }
+
+  if (state === 'post' || det.includes('full time') || /\bft\b/.test(det) || det.includes('finished')) {
+    return 'FINALIZADO'
+  }
+  if (det.includes('postpone')) return 'POSTERGADO'
+  if (det.includes('cancel')) return 'CANCELADO'
 
   return null
 }
