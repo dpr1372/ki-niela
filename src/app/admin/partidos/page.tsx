@@ -66,6 +66,10 @@ function normalize(s: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '') // strip combining accents
+    // Drop word-level connectors before stripping non-alphanumerics, so
+    // "Bosnia y Herzegovina" / "Bosnia-Herzegovina" / "Bosnia and Herzegovina"
+    // all collapse to "bosniaherzegovina".
+    .replace(/\s+(?:y|e|and|&)\s+/g, ' ')
     .replace(/[^a-z0-9]/g, '')
 }
 

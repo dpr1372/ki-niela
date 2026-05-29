@@ -91,17 +91,33 @@ export default async function DashboardPage({
       where: { quinielaId, userId: session.user.id },
       _sum: { points: true },
     }),
-    prisma.score
-      .groupBy({
+    // Mirror the /leaderboard endpoint: rank only ACTIVE members and include
+    // every active member (even those with zero scored matches) so the user's
+    // position reflects what they'll see on the Posiciones page.
+    (async () => {
+      const activeMembers = await prisma.quinielaMember.findMany({
+        where: { quinielaId, status: 'ACTIVE' },
+        select: { userId: true },
+      })
+      const activeUserIds = activeMembers.map((m) => m.userId)
+      if (!activeUserIds.includes(session.user.id)) return null
+      const rows = await prisma.score.groupBy({
         by: ['userId'],
-        where: { quinielaId },
+        where: { quinielaId, userId: { in: activeUserIds } },
         _sum: { points: true },
         orderBy: { _sum: { points: 'desc' } },
       })
-      .then((rows) => {
-        const idx = rows.findIndex((r) => r.userId === session.user.id)
-        return idx === -1 ? null : idx + 1
-      }),
+      // Members with zero scored matches don't appear in the groupBy result —
+      // append them so the user always shows up if they're ACTIVE.
+      const seen = new Set(rows.map((r) => r.userId))
+      const tailUsers = activeUserIds.filter((id) => !seen.has(id))
+      const ranked = [
+        ...rows.map((r) => ({ userId: r.userId, points: r._sum.points ?? 0 })),
+        ...tailUsers.map((id) => ({ userId: id, points: 0 })),
+      ]
+      const idx = ranked.findIndex((r) => r.userId === session.user.id)
+      return idx === -1 ? null : idx + 1
+    })(),
   ])
 
   if (!quiniela) redirect('/quinielas')

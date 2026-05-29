@@ -45,8 +45,11 @@ export async function GET(
     whereScore.matchId = { in: matchIds.map((m) => m.id) }
   }
 
+  // Include every ACTIVE member regardless of role — admins who play also
+  // accumulate points and must appear in the table. The dashboard's "Posición"
+  // card uses the same criterion so both views stay consistent.
   const activeMembers = await prisma.quinielaMember.findMany({
-    where: { quinielaId, status: 'ACTIVE', role: 'PARTICIPANT' },
+    where: { quinielaId, status: 'ACTIVE' },
     select: { userId: true },
   })
   const activeUserIds = activeMembers.map((m) => m.userId)
@@ -59,14 +62,25 @@ export async function GET(
     orderBy: { _sum: { points: 'desc' } },
   })
 
-  const userIds = rows.map((r) => r.userId)
+  // groupBy only returns users that have at least one Score row. Append every
+  // remaining ACTIVE member with 0 pts so the table reflects who is playing,
+  // not just who has been scored. Only applied for the unscoped "general"
+  // view — for matchday/phase/day scopes a member with no relevant scores
+  // shouldn't pad the list.
+  const seen = new Set(rows.map((r) => r.userId))
+  const tail = scope === 'general'
+    ? activeUserIds.filter((id) => !seen.has(id)).map((id) => ({ userId: id, _sum: { points: 0 } }))
+    : []
+  const ranked = [...rows.map((r) => ({ userId: r.userId, _sum: { points: r._sum.points ?? 0 } })), ...tail]
+
+  const userIds = ranked.map((r) => r.userId)
   const users = await prisma.user.findMany({
     where: { id: { in: userIds } },
     select: { id: true, name: true },
   })
   const userMap = new Map(users.map((u) => [u.id, u]))
 
-  const leaderboard = rows.map((r, idx) => ({
+  const leaderboard = ranked.map((r, idx) => ({
     position: idx + 1,
     userId: r.userId,
     name: userMap.get(r.userId)?.name ?? 'Desconocido',
