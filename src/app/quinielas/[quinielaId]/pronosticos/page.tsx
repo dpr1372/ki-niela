@@ -121,7 +121,7 @@ const PHASE_LABELS: Record<string, string> = {
 export default function PronosticosPage() {
   const params = useParams<{ quinielaId: string }>()
   const quinielaId = params.quinielaId
-  const { save, statusMap } = useAutosave(quinielaId)
+  const { save, flush, statusMap } = useAutosave(quinielaId)
   const stripRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading } = useQuery({
@@ -314,6 +314,7 @@ export default function PronosticosPage() {
                                     initialAway={pred?.predictedAwayGoals}
                                     locked={false}
                                     onSave={save}
+                                    onBlur={flush}
                                   />
                                 </div>
                               ) : (
