@@ -68,7 +68,7 @@ export function useAutosave(
       const timer = setTimeout(() => {
         delete pending.current[matchId]
         fire(matchId, homeGoals, awayGoals, false)
-      }, 600)
+      }, 350)
 
       pending.current[matchId] = { home: homeGoals, away: awayGoals, timer }
     },

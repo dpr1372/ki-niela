@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Image from 'next/image'
@@ -192,28 +192,35 @@ export default function PronosticosPage() {
   })()
 
   // Show overlay while a save is in-flight or while a debounced save is queued.
-  // This both signals progress and discourages the user from switching pages
+  // This both signals progress and prevents the user from switching pages
   // before the request lands.
-  const anyPendingSave = inFlight > 0 || Object.values(statusMap).some((s) => s === 'saving')
+  //
+  // We delay the overlay 300ms so that fast saves (~debounce + ~ms latency)
+  // don't flash a blocking screen for every keystroke.
+  const isPending = inFlight > 0 || Object.values(statusMap).some((s) => s === 'saving')
+  const [showSavingOverlay, setShowSavingOverlay] = useState(false)
+  useEffect(() => {
+    if (!isPending) {
+      setShowSavingOverlay(false)
+      return
+    }
+    const t = setTimeout(() => setShowSavingOverlay(true), 300)
+    return () => clearTimeout(t)
+  }, [isPending])
 
   return (
     <AppShell quinielaId={quinielaId}>
-      {anyPendingSave && (
+      {showSavingOverlay && (
         <div
-          className="fixed top-3 right-3 z-50 flex items-center gap-3 rounded-2xl bg-white shadow-xl ring-1 ring-blue-200 px-4 py-2 pointer-events-none"
-          role="status"
-          aria-live="polite"
+          className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center"
+          role="alertdialog"
+          aria-live="assertive"
+          aria-busy="true"
+          onClick={(e) => e.preventDefault()}
         >
-          <Image
-            src="/balon.svg"
-            alt=""
-            width={26}
-            height={26}
-            priority
-            className="ball-spin ball-bounce select-none"
-            draggable={false}
-          />
-          <span className="text-xs font-semibold text-blue-900">Guardando marcador…</span>
+          <div className="bg-white rounded-2xl shadow-2xl px-8 py-6 ring-1 ring-blue-200">
+            <BallLoader label="Guardando marcador…" size={56} />
+          </div>
         </div>
       )}
 
