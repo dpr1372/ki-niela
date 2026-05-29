@@ -1,3 +1,8 @@
+Loaded Prisma config from prisma.config.ts.
+
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "GlobalRole" AS ENUM ('SUPER_ADMIN', 'USER');
 
@@ -17,7 +22,7 @@ CREATE TYPE "MemberRole" AS ENUM ('QUINIELA_ADMIN', 'PARTICIPANT');
 CREATE TYPE "MemberStatus" AS ENUM ('INVITED', 'PENDING_APPROVAL', 'ACTIVE', 'INACTIVE', 'REJECTED');
 
 -- CreateEnum
-CREATE TYPE "MatchPhase" AS ENUM ('GROUPS', 'ROUND_OF_16', 'QUARTER_FINAL', 'SEMI_FINAL', 'THIRD_PLACE', 'FINAL');
+CREATE TYPE "MatchPhase" AS ENUM ('GROUPS', 'ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINAL', 'SEMI_FINAL', 'THIRD_PLACE', 'FINAL');
 
 -- CreateEnum
 CREATE TYPE "MatchStatus" AS ENUM ('PROGRAMADO', 'BLOQUEADO', 'EN_JUEGO', 'MEDIO_TIEMPO', 'TIEMPO_EXTRA', 'PENALES', 'FINALIZADO', 'POSTERGADO', 'CANCELADO');
@@ -160,6 +165,7 @@ CREATE TABLE "Match" (
     "wentToPenalties" BOOLEAN NOT NULL DEFAULT false,
     "liveUpdatedAt" TIMESTAMP(3),
     "resultConfirmedAt" TIMESTAMP(3),
+    "prelockNotifiedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -323,3 +329,4 @@ ALTER TABLE "Score" ADD CONSTRAINT "Score_predictionId_fkey" FOREIGN KEY ("predi
 
 -- AddForeignKey
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorUserId_fkey" FOREIGN KEY ("actorUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
