@@ -195,7 +195,7 @@ export default function ConfiguracionPage() {
             </div>
             <div>
               <Label htmlFor="lock">Minutos de bloqueo antes del partido</Label>
-              <Input id="lock" type="number" min={0} max={120} {...register('lockMinutesBeforeMatch')} className="mt-1 w-28" />
+              <Input id="lock" type="number" min={0} max={120} {...register('lockMinutesBeforeMatch', { valueAsNumber: true })} className="mt-1 w-28" />
             </div>
           </div>
 
@@ -213,11 +213,11 @@ export default function ConfiguracionPage() {
               <div className="flex items-center gap-4">
                 <div>
                   <Label htmlFor="minGoals">Mín. goles</Label>
-                  <Input id="minGoals" type="number" min={0} max={20} {...register('randomMinGoals')} className="mt-1 w-20" />
+                  <Input id="minGoals" type="number" min={0} max={20} {...register('randomMinGoals', { valueAsNumber: true })} className="mt-1 w-20" />
                 </div>
                 <div>
                   <Label htmlFor="maxGoals">Máx. goles</Label>
-                  <Input id="maxGoals" type="number" min={0} max={20} {...register('randomMaxGoals')} className="mt-1 w-20" />
+                  <Input id="maxGoals" type="number" min={0} max={20} {...register('randomMaxGoals', { valueAsNumber: true })} className="mt-1 w-20" />
                 </div>
               </div>
             )}
