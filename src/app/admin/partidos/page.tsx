@@ -300,18 +300,20 @@ export default function AdminPartidosPage() {
   async function runSync() {
     setSyncing(true)
     try {
-      const res = await fetch('/api/jobs/sync-live-scores', {
-        method: 'POST',
-        // Browser can't set the cron secret header (it's server-side only),
-        // but we can hit a safer admin-triggered route. For now we just hint.
-      })
+      const res = await fetch('/api/admin/sync-now', { method: 'POST' })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
-        toast.error('La sincronización debe llamarse desde el cron (usa CRON_SECRET).')
-      } else {
-        toast.success(`Sincronizados: ${json?.synced ?? 0}, finalizados: ${json?.finalized ?? 0}.`)
-        await loadMatches()
+        toast.error(json?.error ?? `Error ${res.status} en sync.`)
+        return
       }
+      const msg =
+        json?.candidates === 0
+          ? json?.message ?? 'No hay partidos activos vinculados aún.'
+          : `Sincronizados: ${json?.synced ?? 0} (${json?.finalized ?? 0} finalizados) · provider: ${json?.provider}`
+      toast.success(msg)
+      await loadMatches()
+    } catch (e) {
+      toast.error(`Error: ${(e as Error).message}`)
     } finally {
       setSyncing(false)
     }
