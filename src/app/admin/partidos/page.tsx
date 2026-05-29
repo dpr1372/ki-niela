@@ -687,7 +687,7 @@ export default function AdminPartidosPage() {
                     <th className="text-left px-3 py-2">Partido</th>
                     <th className="text-left px-3 py-2">Estado</th>
                     <th className="text-left px-3 py-2">Marcador</th>
-                    <th className="text-left px-3 py-2 min-w-[260px]">External ID</th>
+                    <th className="text-left px-3 py-2 min-w-[220px]">External ID</th>
                     <th className="text-left px-3 py-2">Modo</th>
                   </tr>
                 </thead>
@@ -781,7 +781,7 @@ export default function AdminPartidosPage() {
                             </button>
                           )}
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 min-w-[220px] whitespace-nowrap">
                           {editingId === m.id ? (
                             <div className="flex gap-1">
                               <Input
@@ -808,8 +808,8 @@ export default function AdminPartidosPage() {
                               </Button>
                             </div>
                           ) : linked ? (
-                            <div className="flex items-center gap-2 min-w-[230px] flex-nowrap">
-                              <div className="flex flex-col leading-tight min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-nowrap">
+                              <div className="flex flex-col leading-tight min-w-0 max-w-[120px]">
                                 <span
                                   className="font-mono text-[11px] text-blue-700 truncate"
                                   title={m.externalId ?? ''}
