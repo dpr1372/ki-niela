@@ -45,13 +45,14 @@ export async function GET(
     whereScore.matchId = { in: matchIds.map((m) => m.id) }
   }
 
-  // Include every ACTIVE member regardless of quiniela role (a QUINIELA_ADMIN
-  // who plays also accumulates points). But exclude SUPER_ADMIN globals — the
-  // platform admin is not a competitor and must not show up on the leaderboard.
+  // Solo compiten los PARTICIPANT activos. Los QUINIELA_ADMIN administran la
+  // quiniela pero NO acumulan puntos ni aparecen en posiciones. Los SUPER_ADMIN
+  // globales tampoco son competidores (filtro extra de seguridad).
   const activeMembers = await prisma.quinielaMember.findMany({
     where: {
       quinielaId,
       status: 'ACTIVE',
+      role: 'PARTICIPANT',
       user: { globalRole: { not: 'SUPER_ADMIN' } },
     },
     select: { userId: true },

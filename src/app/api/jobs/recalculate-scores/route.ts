@@ -27,9 +27,10 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  // Cleanup any pre-existing Score rows that belong to SUPER_ADMIN globals,
-  // so the leaderboard reflects competitors only. (Earlier runs of the job
-  // could have created them when admins also predicted.)
+  // Solo compiten los PARTICIPANT activos. Limpia cualquier Score que pertenezca
+  // a un no-competidor: SUPER_ADMIN globales, o miembros que NO son PARTICIPANT
+  // activos en su quiniela (p.ej. QUINIELA_ADMIN). El rol es por quiniela, así
+  // que un mismo usuario puede competir en una y administrar en otra.
   const adminUsers = await prisma.user.findMany({
     where: { globalRole: 'SUPER_ADMIN' },
     select: { id: true },
@@ -43,21 +44,32 @@ export async function POST(req: NextRequest) {
     prunedAdmin = del.count
   }
 
+  // Pares (quinielaId,userId) que SÍ compiten. Score que no esté en este set
+  // se elimina (no-competidor o miembro inactivo/sin-rol-participante).
+  const competitors = await prisma.quinielaMember.findMany({
+    where: { status: 'ACTIVE', role: 'PARTICIPANT' },
+    select: { quinielaId: true, userId: true },
+  })
+  const isCompetitor = new Set(competitors.map((c) => `${c.quinielaId}:${c.userId}`))
+
   let recalculated = 0
 
   for (const match of matches) {
-    // Skip SUPER_ADMIN globals — they are not competitors and must not get
-    // Score rows. The leaderboard/dashboard already filter them out, but
-    // pruning here keeps the data clean (no orphan zero-point rows).
+    // Trae todas las predicciones del partido; filtramos a competidores abajo.
     const predictions = await prisma.prediction.findMany({
-      where: {
-        matchId: match.id,
-        user: { globalRole: { not: 'SUPER_ADMIN' } },
-      },
+      where: { matchId: match.id },
       select: { id: true, quinielaId: true, userId: true, predictedHomeGoals: true, predictedAwayGoals: true },
     })
 
     for (const pred of predictions) {
+      // No-competidor (QUINIELA_ADMIN, inactivo, etc.): borra su Score si existe
+      // y no lo recalcules.
+      if (!isCompetitor.has(`${pred.quinielaId}:${pred.userId}`)) {
+        await prisma.score.deleteMany({
+          where: { quinielaId: pred.quinielaId, userId: pred.userId, matchId: match.id },
+        })
+        continue
+      }
       const starRecord = await prisma.quinielaStarMatch.findUnique({
         where: { quinielaId_matchId: { quinielaId: pred.quinielaId, matchId: match.id } },
         select: { isStar: true },

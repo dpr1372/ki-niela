@@ -2,14 +2,15 @@ import { describe, it, expect } from 'vitest'
 
 // Pure logic tests for bot double-gate conditions.
 //
-// El bot NO discrimina por rol (QUINIELA_ADMIN también recibe predicción si
-// activó su check) y NO depende del estado transitorio BLOQUEADO: la compuerta
-// de tiempo es la VENTANA DE BLOQUEO (now ≥ kickoff − lockMinutesBeforeMatch) y
-// que el partido aún no haya finalizado.
+// Solo compiten los PARTICIPANT: el bot NO genera para QUINIELA_ADMIN aunque
+// tengan el check activo. Y NO depende del estado transitorio BLOQUEADO: la
+// compuerta de tiempo es la VENTANA DE BLOQUEO (now ≥ kickoff −
+// lockMinutesBeforeMatch) y que el partido aún no haya finalizado.
 function shouldGenerateBot({
   quinielaRandomEnabled,
   memberAutoEnabled,
   memberStatus,
+  memberRole = 'PARTICIPANT',
   hasPrediction,
   withinLockWindow = true,
   matchFinalized = false,
@@ -17,6 +18,7 @@ function shouldGenerateBot({
   quinielaRandomEnabled: boolean
   memberAutoEnabled: boolean
   memberStatus: string
+  memberRole?: string
   hasPrediction: boolean
   withinLockWindow?: boolean
   matchFinalized?: boolean
@@ -24,6 +26,7 @@ function shouldGenerateBot({
   if (!quinielaRandomEnabled) return false
   if (!memberAutoEnabled) return false
   if (memberStatus !== 'ACTIVE') return false
+  if (memberRole !== 'PARTICIPANT') return false
   if (hasPrediction) return false
   if (!withinLockWindow) return false
   if (matchFinalized) return false
@@ -71,5 +74,9 @@ describe('bot double-gate', () => {
 
   it('skips once the match is finalized (score never changes after the game)', () => {
     expect(shouldGenerateBot({ quinielaRandomEnabled: true, memberAutoEnabled: true, memberStatus: 'ACTIVE', hasPrediction: false, withinLockWindow: true, matchFinalized: true })).toBe(false)
+  })
+
+  it('skips for QUINIELA_ADMIN (admins do not compete)', () => {
+    expect(shouldGenerateBot({ quinielaRandomEnabled: true, memberAutoEnabled: true, memberStatus: 'ACTIVE', memberRole: 'QUINIELA_ADMIN', hasPrediction: false })).toBe(false)
   })
 })

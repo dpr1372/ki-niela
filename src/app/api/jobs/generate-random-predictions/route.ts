@@ -65,10 +65,13 @@ export async function POST(req: NextRequest) {
       })
       const alreadyPredicted = new Set(existingPredictions.map((p) => p.userId))
 
+      // Solo PARTICIPANT: los QUINIELA_ADMIN no compiten, así que el bot no les
+      // genera predicción aunque tengan el check activo.
       const eligibleMembers = await prisma.quinielaMember.findMany({
         where: {
           quinielaId: quiniela.id,
           status: 'ACTIVE',
+          role: 'PARTICIPANT',
           autoPredictionsEnabled: true,
           userId: { notIn: Array.from(alreadyPredicted) },
         },
