@@ -11,6 +11,14 @@ import { ShieldCheck, ShieldOff, UserCheck, UserX, Trophy } from 'lucide-react'
 import { BallLoader } from '@/components/ui/BallLoader'
 import { Switch } from '@/components/ui/switch'
 
+type Membership = {
+  quinielaId: string
+  quinielaName: string
+  quinielaStatus: 'ACTIVE' | 'CLOSED' | 'ARCHIVED'
+  memberStatus: 'INVITED' | 'PENDING_APPROVAL' | 'ACTIVE' | 'INACTIVE' | 'REJECTED'
+  memberRole: 'QUINIELA_ADMIN' | 'PARTICIPANT'
+}
+
 type AdminUser = {
   id: string
   name: string
@@ -18,6 +26,23 @@ type AdminUser = {
   globalRole: 'SUPER_ADMIN' | 'USER'
   status: 'ACTIVE' | 'INACTIVE'
   createdAt: string
+  memberships: Membership[]
+}
+
+const MEMBER_STATUS_LABEL: Record<Membership['memberStatus'], string> = {
+  INVITED: 'Invitado',
+  PENDING_APPROVAL: 'Pendiente',
+  ACTIVE: 'Activo',
+  INACTIVE: 'Inactivo',
+  REJECTED: 'Rechazado',
+}
+
+const MEMBER_STATUS_COLOR: Record<Membership['memberStatus'], string> = {
+  ACTIVE: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  PENDING_APPROVAL: 'bg-amber-100 text-amber-800 border-amber-200',
+  INVITED: 'bg-blue-100 text-blue-800 border-blue-200',
+  INACTIVE: 'bg-gray-100 text-gray-600 border-gray-200',
+  REJECTED: 'bg-red-100 text-red-700 border-red-200',
 }
 
 type AdminQuiniela = {
@@ -46,6 +71,8 @@ export default function AdminUsuariosPage() {
   const [quinielas, setQuinielas] = useState<AdminQuiniela[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE'>('ALL')
+  // Filtro por quiniela: 'ALL' = todas; o un quinielaId concreto.
+  const [quinielaFilter, setQuinielaFilter] = useState<string>('ALL')
 
   useEffect(() => {
     if (status === 'loading') return
@@ -155,10 +182,22 @@ export default function AdminUsuariosPage() {
   }
 
   const filtered = users?.filter((u) => {
-    if (filter === 'PENDING') return u.status === 'INACTIVE'
-    if (filter === 'ACTIVE') return u.status === 'ACTIVE'
+    // Filtro de estado global de la cuenta.
+    if (filter === 'PENDING' && u.status !== 'INACTIVE') return false
+    if (filter === 'ACTIVE' && u.status !== 'ACTIVE') return false
+    // Filtro por quiniela: solo usuarios que son miembros de la quiniela elegida.
+    if (quinielaFilter !== 'ALL' && !u.memberships.some((m) => m.quinielaId === quinielaFilter)) {
+      return false
+    }
     return true
   })
+
+  // Para la columna y el filtro, decide qué membresías mostrar: si hay filtro
+  // por quiniela, resalta esa; si no, todas.
+  const membershipsToShow = (u: AdminUser) =>
+    quinielaFilter === 'ALL'
+      ? u.memberships
+      : u.memberships.filter((m) => m.quinielaId === quinielaFilter)
 
   return (
     <AppShell>
@@ -173,7 +212,7 @@ export default function AdminUsuariosPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {[
             { key: 'ALL', label: 'Todos' },
             { key: 'PENDING', label: 'Pendientes' },
@@ -188,6 +227,28 @@ export default function AdminUsuariosPage() {
               {f.label}
             </Button>
           ))}
+
+          {/* Filtro por quiniela: ver quién está unido a cada quiniela */}
+          {quinielas && quinielas.length > 0 && (
+            <div className="ml-auto flex items-center gap-2">
+              <label htmlFor="quinielaFilter" className="text-xs font-semibold text-gray-600">
+                Quiniela:
+              </label>
+              <select
+                id="quinielaFilter"
+                value={quinielaFilter}
+                onChange={(e) => setQuinielaFilter(e.target.value)}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 outline-none focus:border-emerald-500"
+              >
+                <option value="ALL">Todas las quinielas</option>
+                {quinielas.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.name} {q.status !== 'ACTIVE' ? '(archivada)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* ── Sección Quinielas ─────────────────────────────────────────────── */}
@@ -254,16 +315,17 @@ export default function AdminUsuariosPage() {
                   <th className="text-left px-4 py-3">Correo</th>
                   <th className="text-left px-4 py-3">Rol Global</th>
                   <th className="text-left px-4 py-3">Estado</th>
+                  <th className="text-left px-4 py-3">Quinielas</th>
                   <th className="text-left px-4 py-3">Registrado</th>
                   <th className="text-right px-4 py-3">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={6} className="px-4 py-6"><BallLoader label="Cargando…" /></td></tr>
+                  <tr><td colSpan={7} className="px-4 py-6"><BallLoader label="Cargando…" /></td></tr>
                 )}
                 {!loading && filtered?.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-500">Sin usuarios.</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-500">Sin usuarios.</td></tr>
                 )}
                 {filtered?.map((u) => (
                   <tr key={u.id} className="border-t border-gray-100 hover:bg-emerald-50/40">
@@ -278,6 +340,33 @@ export default function AdminUsuariosPage() {
                       <span className={`text-[11px] font-bold uppercase px-2 py-0.5 rounded-full border ${STATUS_COLOR[u.status]}`}>
                         {STATUS_LABEL[u.status]}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {membershipsToShow(u).length === 0 ? (
+                        <span className="text-xs text-gray-400 italic">Ninguna</span>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {membershipsToShow(u).map((m) => (
+                            <span
+                              key={m.quinielaId}
+                              className="inline-flex items-center gap-1.5 text-xs"
+                              title={`${m.quinielaName} · ${MEMBER_STATUS_LABEL[m.memberStatus]}`}
+                            >
+                              <span
+                                className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${MEMBER_STATUS_COLOR[m.memberStatus]}`}
+                              >
+                                {MEMBER_STATUS_LABEL[m.memberStatus]}
+                              </span>
+                              <span className={`truncate max-w-[140px] ${m.quinielaStatus !== 'ACTIVE' ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                                {m.quinielaName}
+                              </span>
+                              {m.memberRole === 'QUINIELA_ADMIN' && (
+                                <span className="text-[9px] font-bold text-amber-700">★</span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {new Date(u.createdAt).toLocaleDateString('es-CR')}
