@@ -73,10 +73,11 @@ export default async function MisQuinielasPage() {
           title="Mis Quinielas"
           subtitle="Compite, predice y celebra cada gol del mundial."
           rightSlot={
-            <div className="flex items-center gap-2 flex-wrap">
+            isSuperAdmin ? (
+              <CrearQuinielaButton events={events} />
+            ) : (
               <JoinByCodeButton />
-              {isSuperAdmin && <CrearQuinielaButton events={events} />}
-            </div>
+            )
           }
         />
 
@@ -84,12 +85,20 @@ export default async function MisQuinielasPage() {
           <div className="card-pitch rounded-2xl text-center py-20 text-gray-500">
             <Trophy size={56} className="mx-auto mb-4 text-yellow-400/40" />
             <p className="text-lg font-bold text-gray-700">Aún no participas en ninguna quiniela.</p>
-            <p className="text-sm mt-1 mb-5">
-              Ingresa un código de invitación para unirte, o pídele al administrador que te agregue.
-            </p>
-            <div className="flex justify-center">
-              <JoinByCodeButton />
-            </div>
+            {isSuperAdmin ? (
+              <p className="text-sm mt-1">
+                Crea una quiniela con el botón de arriba para comenzar.
+              </p>
+            ) : (
+              <>
+                <p className="text-sm mt-1 mb-5">
+                  Ingresa un código de invitación para unirte, o pídele al administrador que te agregue.
+                </p>
+                <div className="flex justify-center">
+                  <JoinByCodeButton />
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <>
