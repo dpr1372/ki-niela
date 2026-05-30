@@ -32,12 +32,11 @@ export function PredictionInput({ matchId, initialHome, initialAway, locked, onS
 
   function handleChange(field: 'home' | 'away', rawValue: string) {
     // Solo dígitos: descarta letras, signos, puntos, "e", espacios, etc.
-    // Mantiene como máximo 2 dígitos (marcador 0-20 → la validación de rango
-    // se aplica abajo).
+    // Máximo 2 dígitos (un marcador no pasa de 99).
     const value = rawValue.replace(/\D/g, '').slice(0, 2)
 
     const num = parseInt(value, 10)
-    if (value !== '' && (isNaN(num) || num < 0 || num > 20)) return
+    if (value !== '' && (isNaN(num) || num < 0)) return
 
     const nextHome = field === 'home' ? value : home
     const nextAway = field === 'away' ? value : away
