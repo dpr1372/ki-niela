@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { fetchFixtures, mapStatus, providerName } from '@/lib/live-providers'
 import { calculateScore } from '@/lib/scoring'
+import { teamsMatch } from '@/lib/team-matching'
 
 const ACTIVE_STATUSES = ['BLOQUEADO', 'EN_JUEGO', 'MEDIO_TIEMPO', 'TIEMPO_EXTRA', 'PENALES'] as const
 
@@ -33,7 +34,15 @@ export async function POST(req: NextRequest) {
   // The provider module decides which one is active.
 
   // Pick active matches with an external mapping that is NOT under manual override.
-  let candidates: { id: string; externalId: string | null; eventId: string }[]
+  // Include team names so we can reconcile home/away orientation against the
+  // provider (ESPN may list the same fixture with home/away swapped).
+  let candidates: {
+    id: string
+    externalId: string | null
+    eventId: string
+    homeTeam: { name: string } | null
+    awayTeam: { name: string } | null
+  }[]
   try {
     candidates = await prisma.match.findMany({
       where: {
@@ -41,7 +50,13 @@ export async function POST(req: NextRequest) {
         manualOverride: false,
         status: { in: ACTIVE_STATUSES as unknown as never },
       },
-      select: { id: true, externalId: true, eventId: true },
+      select: {
+        id: true,
+        externalId: true,
+        eventId: true,
+        homeTeam: { select: { name: true } },
+        awayTeam: { select: { name: true } },
+      },
     })
   } catch (e) {
     console.error('[sync-live-scores] DB error', e)
@@ -81,25 +96,53 @@ export async function POST(req: NextRequest) {
     if (!newStatus) continue
     if (fixture.homeGoals === null || fixture.awayGoals === null) continue
 
+    // Reconcile orientation: ESPN may report the fixture with home/away in the
+    // opposite order to ours. If our HOME team matches ESPN's AWAY (and vice
+    // versa), the provider goals are swapped relative to us → flip them.
+    // Otherwise keep as-is. We only flip on a confident cross-match to avoid
+    // mangling rows when names don't resolve.
+    let homeGoals = fixture.homeGoals
+    let awayGoals = fixture.awayGoals
+    let penHome = fixture.penaltyHomeGoals
+    let penAway = fixture.penaltyAwayGoals
+
+    const ourHome = match.homeTeam?.name
+    const ourAway = match.awayTeam?.name
+    const fxHome = fixture.homeName
+    const fxAway = fixture.awayName
+    if (ourHome && ourAway && fxHome && fxAway) {
+      const sameOrientation = teamsMatch(ourHome, fxHome) && teamsMatch(ourAway, fxAway)
+      const swappedOrientation = teamsMatch(ourHome, fxAway) && teamsMatch(ourAway, fxHome)
+      if (swappedOrientation && !sameOrientation) {
+        homeGoals = fixture.awayGoals
+        awayGoals = fixture.homeGoals
+        penHome = fixture.penaltyAwayGoals
+        penAway = fixture.penaltyHomeGoals
+        console.warn(
+          `[sync-live-scores] orientation swap for ${match.id}: ESPN ${fxHome} ${fixture.homeGoals}-${fixture.awayGoals} ${fxAway} → KN ${ourHome} ${homeGoals}-${awayGoals} ${ourAway}`,
+        )
+      }
+    }
+
     const isFinal = newStatus === 'FINALIZADO'
     const updateData: Record<string, unknown> = {
-      liveHomeGoals: fixture.homeGoals,
-      liveAwayGoals: fixture.awayGoals,
+      liveHomeGoals: homeGoals,
+      liveAwayGoals: awayGoals,
       status: newStatus,
       liveSource: 'API_AUTO',
       liveUpdatedAt: new Date(),
       lastSyncAt: new Date(),
     }
 
-    if (fixture.penaltyHomeGoals !== null && fixture.penaltyAwayGoals !== null) {
-      updateData.penaltyHomeGoals = fixture.penaltyHomeGoals
-      updateData.penaltyAwayGoals = fixture.penaltyAwayGoals
+    if (penHome !== null && penAway !== null) {
+      updateData.penaltyHomeGoals = penHome
+      updateData.penaltyAwayGoals = penAway
       updateData.wentToPenalties = true
     }
 
     if (isFinal) {
-      updateData.officialHomeGoals = fixture.homeGoals
-      updateData.officialAwayGoals = fixture.awayGoals
+      updateData.officialHomeGoals = homeGoals
+      updateData.officialAwayGoals = awayGoals
       updateData.resultConfirmedAt = new Date()
     }
 
@@ -126,8 +169,8 @@ export async function POST(req: NextRequest) {
         const result = calculateScore(
           pred.predictedHomeGoals,
           pred.predictedAwayGoals,
-          fixture.homeGoals!,
-          fixture.awayGoals!,
+          homeGoals,
+          awayGoals,
           isStar,
         )
         await prisma.score.upsert({
