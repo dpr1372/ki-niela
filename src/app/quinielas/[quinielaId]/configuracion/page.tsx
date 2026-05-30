@@ -174,6 +174,22 @@ export default function ConfiguracionPage() {
     onError: (err: Error) => toast.error(err.message),
   })
 
+  const regenerateCode = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/quinielas/${quinielaId}/invite-code/regenerate`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Error al regenerar el código.')
+      return json
+    },
+    onSuccess: (json) => {
+      toast.success(json.message ?? 'Código regenerado.')
+      qc.invalidateQueries({ queryKey: ['quiniela', quinielaId] })
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  const inviteCode: string | null = data?.quiniela?.inviteCode ?? null
+
   if (isLoading) {
     return (
       <AppShell quinielaId={quinielaId}>
@@ -242,6 +258,42 @@ export default function ConfiguracionPage() {
             Guardar cambios
           </Button>
         </form>
+
+        {/* Código de invitación: compartir con quien deba unirse a esta quiniela */}
+        <div className="card-pitch rounded-xl p-5 space-y-3">
+          <h2 className="font-semibold text-gray-700">Código de invitación</h2>
+          <p className="text-xs text-gray-500">
+            Comparte este código solo con quienes deban unirse a esta quiniela. Quien lo ingrese se une de inmediato.
+            Si se filtra, regéneralo: el anterior dejará de funcionar.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <code className="text-lg font-mono tracking-widest font-bold bg-gray-100 border border-gray-200 rounded px-3 py-1.5">
+              {inviteCode ?? 'Sin código'}
+            </code>
+            {inviteCode && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(inviteCode)
+                  toast.success('Código copiado.')
+                }}
+              >
+                Copiar
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={regenerateCode.isPending}
+              onClick={() => regenerateCode.mutate()}
+            >
+              {regenerateCode.isPending ? 'Regenerando…' : inviteCode ? 'Regenerar' : 'Generar código'}
+            </Button>
+          </div>
+        </div>
 
         <div className="card-pitch rounded-xl p-5 space-y-4">
           <div className="flex items-start justify-between gap-3 flex-wrap">
