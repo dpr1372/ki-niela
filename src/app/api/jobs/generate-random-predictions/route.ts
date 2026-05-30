@@ -2,36 +2,63 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { isMatchLocked } from '@/lib/timezone'
 
+/**
+ * Cron job: genera predicciones automáticas (bot) para los participantes que
+ * activaron su check de predicciones automáticas.
+ *
+ * Diseño robusto (no depende del estado transitorio BLOQUEADO):
+ *  - El bot NO se ancla al status BLOQUEADO porque otro cron (sync-live-scores)
+ *    puede pisar ese estado a EN_JUEGO antes de que este job corra, dejando a
+ *    los jugadores sin predicción. En su lugar evaluamos la VENTANA DE BLOQUEO
+ *    por quiniela: si ya entró (now ≥ kickoff − lockMinutesBeforeMatch) y el
+ *    partido aún no finalizó, el bot rellena a quien tenga el check activo.
+ *  - lockMinutesBeforeMatch es por quiniela (config del admin). Cada quiniela
+ *    decide cuándo abre su ventana de bot.
+ *  - NUNCA toca partidos finalizados/cancelados/postergados ni con resultado
+ *    oficial: una vez el partido empezó o terminó, el marcador no se modifica.
+ *  - NUNCA sobrescribe una predicción existente (manual o bot).
+ */
 export async function POST(req: NextRequest) {
   const secret = req.headers.get('x-cron-secret')
   if (secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Find matches that just became locked (BLOQUEADO) and haven't had bot predictions run
-  const lockedMatches = await prisma.match.findMany({
-    where: { status: 'BLOQUEADO' },
+  // Candidatos: partidos que NO han finalizado ni se cancelaron/postergaron, y
+  // que aún no tienen resultado oficial confirmado. Incluye PROGRAMADO,
+  // BLOQUEADO, EN_JUEGO, MEDIO_TIEMPO, TIEMPO_EXTRA, PENALES — la ventana de
+  // bloqueo por quiniela decide cuáles aplican.
+  const candidates = await prisma.match.findMany({
+    where: {
+      status: { notIn: ['FINALIZADO', 'CANCELADO', 'POSTERGADO'] },
+      resultConfirmedAt: null,
+    },
     select: { id: true, eventId: true, kickoffAtUtc: true },
   })
 
   let generated = 0
 
-  for (const match of lockedMatches) {
-    // Double-check lock is valid
-    if (!isMatchLocked(new Date(match.kickoffAtUtc), 0)) continue
-
-    // Get all quinielas for this event that have randomPredictionsEnabled
+  for (const match of candidates) {
+    // Todas las quinielas activas del evento con bot habilitado.
     const quinielas = await prisma.quiniela.findMany({
       where: { eventId: match.eventId, randomPredictionsEnabled: true, status: 'ACTIVE' },
       select: {
         id: true,
         randomMinGoals: true,
         randomMaxGoals: true,
+        lockMinutesBeforeMatch: true,
       },
     })
 
     for (const quiniela of quinielas) {
-      // Get active members with autoPredictionsEnabled who have no prediction for this match
+      // ¿El partido ya entró en la ventana de bloqueo de ESTA quiniela?
+      // Antes de la ventana el jugador todavía puede pronosticar a mano, así
+      // que el bot no debe adelantarse.
+      if (!isMatchLocked(new Date(match.kickoffAtUtc), quiniela.lockMinutesBeforeMatch)) {
+        continue
+      }
+
+      // Miembros activos con check de bot que aún no tienen predicción.
       const existingPredictions = await prisma.prediction.findMany({
         where: { quinielaId: quiniela.id, matchId: match.id },
         select: { userId: true },
@@ -42,7 +69,6 @@ export async function POST(req: NextRequest) {
         where: {
           quinielaId: quiniela.id,
           status: 'ACTIVE',
-          role: 'PARTICIPANT',
           autoPredictionsEnabled: true,
           userId: { notIn: Array.from(alreadyPredicted) },
         },
@@ -55,19 +81,30 @@ export async function POST(req: NextRequest) {
       for (const member of eligibleMembers) {
         const home = randomInt(min, max)
         const away = randomInt(min, max)
-        await prisma.prediction.create({
-          data: {
-            quinielaId: quiniela.id,
-            eventId: match.eventId,
-            userId: member.userId,
-            matchId: match.id,
-            predictedHomeGoals: home,
-            predictedAwayGoals: away,
-            generatedByBot: true,
-            lockedAt: new Date(),
-          },
-        })
-        generated++
+        // create() (no upsert): si por carrera otro proceso ya insertó la
+        // predicción, el unique(quinielaId,userId,matchId) la rechaza y la
+        // saltamos — nunca pisamos una predicción existente.
+        try {
+          await prisma.prediction.create({
+            data: {
+              quinielaId: quiniela.id,
+              eventId: match.eventId,
+              userId: member.userId,
+              matchId: match.id,
+              predictedHomeGoals: home,
+              predictedAwayGoals: away,
+              generatedByBot: true,
+              lockedAt: new Date(),
+            },
+          })
+          generated++
+        } catch (e) {
+          // P2002 = unique violation: otra ejecución ya insertó la predicción.
+          // La saltamos en silencio. Cualquier otro error sí lo logueamos.
+          if ((e as { code?: string }).code !== 'P2002') {
+            console.error('[generate-random-predictions] create failed', e)
+          }
+        }
       }
     }
   }
