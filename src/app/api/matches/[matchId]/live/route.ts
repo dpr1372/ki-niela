@@ -67,22 +67,10 @@ export async function PATCH(
     })
     const starQuinielaIds = new Set(starMatches.map((s) => s.quinielaId))
 
-    // Solo puntúan los PARTICIPANT activos. Los QUINIELA_ADMIN (y cualquier
-    // no-participante/inactivo) no acumulan puntos: borramos su Score si existe
-    // y no lo recalculamos. El rol es por quiniela.
-    const competitors = await prisma.quinielaMember.findMany({
-      where: { status: 'ACTIVE', role: 'PARTICIPANT' },
-      select: { quinielaId: true, userId: true },
-    })
-    const isCompetitor = new Set(competitors.map((c) => `${c.quinielaId}:${c.userId}`))
-
+    // Recalcula todas las predicciones. Los Scores de QUINIELA_ADMIN se
+    // CONSERVAN pero las posiciones los ignoran (filtran por role PARTICIPANT),
+    // así que no afectan puntos ni ranking.
     for (const pred of predictions) {
-      if (!isCompetitor.has(`${pred.quinielaId}:${pred.userId}`)) {
-        await prisma.score.deleteMany({
-          where: { quinielaId: pred.quinielaId, userId: pred.userId, matchId },
-        })
-        continue
-      }
       const isStar = starQuinielaIds.has(pred.quinielaId)
       const result = calculateScore(
         pred.predictedHomeGoals,

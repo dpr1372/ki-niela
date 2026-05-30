@@ -27,49 +27,19 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  // Solo compiten los PARTICIPANT activos. Limpia cualquier Score que pertenezca
-  // a un no-competidor: SUPER_ADMIN globales, o miembros que NO son PARTICIPANT
-  // activos en su quiniela (p.ej. QUINIELA_ADMIN). El rol es por quiniela, así
-  // que un mismo usuario puede competir en una y administrar en otra.
-  const adminUsers = await prisma.user.findMany({
-    where: { globalRole: 'SUPER_ADMIN' },
-    select: { id: true },
-  })
-  const adminIds = adminUsers.map((u) => u.id)
-  let prunedAdmin = 0
-  if (adminIds.length > 0) {
-    const del = await prisma.score.deleteMany({
-      where: { userId: { in: adminIds } },
-    })
-    prunedAdmin = del.count
-  }
-
-  // Pares (quinielaId,userId) que SÍ compiten. Score que no esté en este set
-  // se elimina (no-competidor o miembro inactivo/sin-rol-participante).
-  const competitors = await prisma.quinielaMember.findMany({
-    where: { status: 'ACTIVE', role: 'PARTICIPANT' },
-    select: { quinielaId: true, userId: true },
-  })
-  const isCompetitor = new Set(competitors.map((c) => `${c.quinielaId}:${c.userId}`))
-
   let recalculated = 0
 
   for (const match of matches) {
-    // Trae todas las predicciones del partido; filtramos a competidores abajo.
+    // Recalcula el Score de todas las predicciones del partido. Los Scores de
+    // QUINIELA_ADMIN / no-competidores se CONSERVAN (no se borran), pero las
+    // vistas de posiciones/dashboard ya los ignoran porque filtran por
+    // role='PARTICIPANT'. Así no afectan puntos ni ranking.
     const predictions = await prisma.prediction.findMany({
       where: { matchId: match.id },
       select: { id: true, quinielaId: true, userId: true, predictedHomeGoals: true, predictedAwayGoals: true },
     })
 
     for (const pred of predictions) {
-      // No-competidor (QUINIELA_ADMIN, inactivo, etc.): borra su Score si existe
-      // y no lo recalcules.
-      if (!isCompetitor.has(`${pred.quinielaId}:${pred.userId}`)) {
-        await prisma.score.deleteMany({
-          where: { quinielaId: pred.quinielaId, userId: pred.userId, matchId: match.id },
-        })
-        continue
-      }
       const starRecord = await prisma.quinielaStarMatch.findUnique({
         where: { quinielaId_matchId: { quinielaId: pred.quinielaId, matchId: match.id } },
         select: { isStar: true },
@@ -109,5 +79,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ recalculated, prunedAdmin })
+  return NextResponse.json({ recalculated })
 }
