@@ -193,7 +193,7 @@ const TEAM_ALIASES: string[][] = [
   ['isr', 'israel'],
   ['pse', 'palestine', 'palestina'],
   ['ksa', 'saudiarabia', 'arabiasaudita', 'arabiasaudi'],
-  ['qat', 'qatar'],
+  ['qat', 'qatar', 'catar'],
   ['bhr', 'bahrain', 'bahréin', 'bahrein'],
   ['kuw', 'kuwait'],
   ['omn', 'oman', 'omán'],
