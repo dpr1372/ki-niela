@@ -84,13 +84,22 @@ export async function GET(
   })
   const userMap = new Map(users.map((u) => [u.id, u]))
 
-  const leaderboard = ranked.map((r, idx) => ({
-    position: idx + 1,
-    userId: r.userId,
-    name: userMap.get(r.userId)?.name ?? 'Desconocido',
-    points: r._sum.points ?? 0,
-    isMe: r.userId === session.user.id,
-  }))
+  // Ranking denso ("1223"): los empatados comparten posición y el siguiente
+  // sube a la posición inmediata (50, 50, 40, 30 → 1, 1, 2, 3). Es decir, la
+  // posición = (cantidad de PUNTAJES DISTINTOS por encima) + 1.
+  const leaderboard = ranked.map((r) => {
+    const points = r._sum.points ?? 0
+    const distinctAbove = new Set(
+      ranked.filter((x) => (x._sum.points ?? 0) > points).map((x) => x._sum.points ?? 0),
+    ).size
+    return {
+      position: distinctAbove + 1,
+      userId: r.userId,
+      name: userMap.get(r.userId)?.name ?? 'Desconocido',
+      points,
+      isMe: r.userId === session.user.id,
+    }
+  })
 
   return NextResponse.json(leaderboard)
 }

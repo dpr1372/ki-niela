@@ -120,8 +120,15 @@ export default async function DashboardPage({
         ...rows.map((r) => ({ userId: r.userId, points: r._sum.points ?? 0 })),
         ...tailUsers.map((id) => ({ userId: id, points: 0 })),
       ]
-      const idx = ranked.findIndex((r) => r.userId === session.user.id)
-      return idx === -1 ? null : idx + 1
+      const me = ranked.find((r) => r.userId === session.user.id)
+      if (!me) return null
+      // Ranking denso ("1223"): empatados comparten posición y el siguiente sube
+      // a la posición inmediata → posición = 1 + (cantidad de PUNTAJES DISTINTOS
+      // por encima del mío).
+      const distinctAbove = new Set(
+        ranked.filter((r) => r.points > me.points).map((r) => r.points),
+      ).size
+      return distinctAbove + 1
     })(),
   ])
 
