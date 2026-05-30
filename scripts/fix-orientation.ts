@@ -6,7 +6,7 @@
  * Para cada Match con externalId y resultado (live u oficial):
  *   1. Consulta ESPN.
  *   2. Compara orientación con teamsMatch(ourHome, fxHome/fxAway).
- *   3. Si está invertido, voltea live*/official*/penalty* goals.
+ *   3. Si está invertido, voltea los goles live / official / penalty.
  *   4. Recalcula Score de TODAS las predicciones del match en TODAS las
  *      quinielas (Mundial, DP-TI, Amistosos…), respetando partido estrella.
  *
@@ -85,7 +85,22 @@ async function main() {
     const swapped = teamsMatch(ourHome, fx.awayName) && teamsMatch(ourAway, fx.homeName)
 
     if (!swapped || same) {
-      // Alineado (o no se pudo determinar con confianza) → no tocar.
+      // Orientación de equipos alineada (o no determinable con confianza) → el
+      // sync ya guarda bien; no tocar.
+      continue
+    }
+
+    // La orientación de EQUIPOS está cruzada (ESPN local = nuestro visitante).
+    // Eso es permanente y NO es señal de error por sí solo. Solo corregimos si
+    // los GOLES guardados todavía están en orientación ESPN — es decir, si
+    // nuestro home tiene los goles que ESPN asignó a su home. Comparamos contra
+    // el valor que DEBERÍA tener nuestro home (= goles del away de ESPN).
+    const expectedHome = fx.awayGoals // nuestro home == away de ESPN
+    const expectedAway = fx.homeGoals
+    const curHome = m.officialHomeGoals ?? m.liveHomeGoals
+    const curAway = m.officialAwayGoals ?? m.liveAwayGoals
+    if (curHome === expectedHome && curAway === expectedAway) {
+      // Goles ya alineados a nuestra orientación → idempotente, no tocar.
       continue
     }
 
