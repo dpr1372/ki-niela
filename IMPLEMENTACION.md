@@ -2,7 +2,7 @@
 
 Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qué**, el **por qué** y el **cómo probar/operar**. Para arquitectura general ver [`GUIA_COMPLETA.md`](GUIA_COMPLETA.md); para integración de marcadores ver [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md).
 
-> **Última revisión:** 2026-05-30
+> **Última revisión:** 2026-05-30 (sesión 2)
 
 ---
 
@@ -18,10 +18,13 @@ Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qu
 8. [Posiciones: SUPER_ADMIN excluido del ranking](#8-posiciones-super_admin-excluido-del-ranking)
 9. [Auto-vincular partidos: matching difuso de nombres](#9-auto-vincular-partidos-matching-difuso-de-nombres)
 10. [Endpoint diagnóstico de mailer](#10-endpoint-diagnóstico-de-mailer)
-11. [Quiniela "DP-TI COPA MUNDO 2026" (clon del Mundial)](#12-quiniela-dp-ti-copa-mundo-2026-clon-del-mundial)
-12. [Bracket eliminatorio Mundial 2026 con calendario FIFA oficial](#13-bracket-eliminatorio-mundial-2026-con-calendario-fifa-oficial)
-13. [Sincronización ESPN: reconciliar orientación home/away](#14-sincronización-espn-reconciliar-orientación-homeaway)
-14. [Setup local + troubleshooting](#11-setup-local--troubleshooting)
+11. [Quiniela "DP-TI COPA MUNDO 2026" (clon del Mundial)](#11-quiniela-dp-ti-copa-mundo-2026-clon-del-mundial)
+12. [Bracket eliminatorio Mundial 2026 con calendario FIFA oficial](#12-bracket-eliminatorio-mundial-2026-con-calendario-fifa-oficial)
+13. [Sincronización ESPN: reconciliar orientación home/away](#13-sincronización-espn-reconciliar-orientación-homeaway)
+14. [Bot: ventana de bloqueo + QUINIELA_ADMIN excluido de competencia](#14-bot-ventana-de-bloqueo--quiniela_admin-excluido-de-competencia)
+15. [Aislamiento de quinielas por usuario + código de invitación](#15-aislamiento-de-quinielas-por-usuario--código-de-invitación)
+16. [Admin/usuarios: membresías y filtro por quiniela](#16-adminusuarios-membresías-y-filtro-por-quiniela)
+17. [Setup local + troubleshooting](#17-setup-local--troubleshooting)
 
 ---
 
@@ -259,7 +262,7 @@ fetch('/api/admin/diag/mailer', {
 
 ---
 
-## 12. Quiniela "DP-TI COPA MUNDO 2026" (clon del Mundial)
+## 11. Quiniela "DP-TI COPA MUNDO 2026" (clon del Mundial)
 
 Quiniela paralela para el equipo DP-TI sobre el mismo evento del Mundial 2026.
 
@@ -302,7 +305,7 @@ DATABASE_URL=<url> npx tsx scripts/sync-mundial-stars.ts
 
 ---
 
-## 13. Bracket eliminatorio Mundial 2026 con calendario FIFA oficial
+## 12. Bracket eliminatorio Mundial 2026 con calendario FIFA oficial
 
 `scripts/seed-mundial-knockouts.ts` siembra los 30 partidos eliminatorios del
 Mundial 2026 con fechas y sedes oficiales según el calendario FIFA, y ajusta el
@@ -355,7 +358,7 @@ Después del **27 jun 2026** (fin de fase de grupos):
 
 ---
 
-## 14. Sincronización ESPN: reconciliar orientación home/away
+## 13. Sincronización ESPN: reconciliar orientación home/away
 
 ### Problema
 
@@ -427,7 +430,160 @@ vuelve a voltear un marcador ya correcto.
 
 ---
 
-## 11. Setup local + troubleshooting
+## 14. Bot: ventana de bloqueo + QUINIELA_ADMIN excluido de competencia
+
+### Problema original — race condition del bot
+
+El bot (`/api/jobs/generate-random-predictions`) filtraba candidatos con `status='BLOQUEADO'`. Si `sync-live-scores` corría primero y cambiaba el status a `EN_JUEGO`, el bot ya no encontraba el partido y **ningún participante recibía predicción automática**.
+
+Problema adicional: los `QUINIELA_ADMIN` acumulaban puntos, aparecían en posiciones y el bot les generaba predicciones, cuando la regla de negocio es que **solo `PARTICIPANT` compite**.
+
+### Solución: ventana temporal + filtro de rol
+
+**Bot independiente del status del partido.** El candidato se evalúa por tiempo, no por status:
+
+```ts
+// Candidatos: partidos no finalizados, no con resultado confirmado,
+// cuyo kickoff ya pasó el umbral de bloqueo (kickoff - lockMinutesBeforeMatch).
+const now = new Date()
+const candidatos = partidos.filter(p =>
+  !['FINALIZADO','CANCELADO','POSTERGADO'].includes(p.status) &&
+  !p.resultConfirmedAt &&
+  isMatchLocked(p.kickoffAtUtc, quiniela.lockMinutesBeforeMatch)
+)
+```
+
+`isMatchLocked(kickoffAtUtc, lockMinutes)` — retorna `true` si `Date.now() >= kickoff - lockMinutes * 60_000`.
+
+**Filtro de rol restaurado.** Solo se generan predicciones para miembros con `role: 'PARTICIPANT'` (además de `status: 'ACTIVE'` y `autoPredictionsEnabled: true`).
+
+### QUINIELA_ADMIN excluido de toda la competencia (regla de negocio)
+
+Los administradores de quiniela **no compiten**: no acumulan puntos, no aparecen en posiciones, no reciben predicciones del bot.
+
+**Filtro aplicado en la capa de lectura** (no en la BD — los Scores se conservan):
+
+| Endpoint / UI | Filtro añadido |
+|---|---|
+| `/api/quinielas/[id]/leaderboard` | `role: 'PARTICIPANT'` |
+| `/quinielas/[id]/dashboard` (posición del usuario) | `role: 'PARTICIPANT'` |
+| `/api/jobs/generate-random-predictions` | `role: 'PARTICIPANT'` |
+| `prediction-matrix`, `en-vivo` | `role: 'PARTICIPANT'` |
+
+**Los Scores de QUINIELA_ADMIN se conservan en BD** — `recalculate-scores`, `sync-live-scores` y `matches/[id]/live` calculan todas las predicciones sin borrar. Solo la lectura los ignora. (Decisión tomada el 30 may 2026: no borrar, solo no contar.)
+
+**Archivos clave:**
+- `src/app/api/jobs/generate-random-predictions/route.ts` — lógica de ventana + filtro de rol.
+- `src/app/api/quinielas/[quinielaId]/leaderboard/route.ts`
+- `src/app/quinielas/[quinielaId]/dashboard/page.tsx`
+- `src/__tests__/bot-gate.test.ts` — 27 tests que validan la ventana de bloqueo y la exclusión de admin.
+
+---
+
+## 15. Aislamiento de quinielas por usuario + código de invitación
+
+### Problema original
+
+Con más de una quiniela activa, cualquier usuario autenticado veía **todas las quinielas activas** en la sección "Disponibles para unirse" de `/quinielas`. Esto rompía el aislamiento entre grupos (amigos, trabajo, familia) que usan la misma plataforma.
+
+### Solución: visibilidad solo por membresía
+
+`/quinielas` ahora lista **únicamente** las quinielas donde el usuario ya tiene fila `QuinielaMember`. Se eliminó la sección "Disponibles para unirse" y toda la query de `browsableQuinielas`. El acceso por URL directo sigue bloqueado por `getMemberContext` (sin fila → sin acceso; el dashboard redirige a `/quinielas`).
+
+### Formas de unirse a una quiniela nueva
+
+**1. Código de invitación (auto-servicio)**
+
+Cada `Quiniela` tiene un campo `inviteCode String? @unique` generado al crear (`nanoid(8).toUpperCase()`). El participante lo ingresa desde `/quinielas` → botón "Unirme a una quiniela".
+
+`POST /api/quinielas/join` con `{ code: "XXXXXXXX" }`:
+- Normaliza el código a mayúsculas (case-insensitive).
+- Valida que la quiniela exista y esté `ACTIVE`.
+- Une al usuario como `PARTICIPANT ACTIVE` de inmediato (el código es la compuerta, igual que el admin-add directo).
+- Bordes: ya `ACTIVE` → 409; `PENDING/INVITED` → promueve a `ACTIVE`; `INACTIVE/REJECTED` → 409 (respeta la decisión del admin, no reactiva solo).
+- AuditLog: `action: 'MEMBER_JOINED_BY_CODE'`.
+
+**2. Admin agrega directo** — `POST /api/quinielas/[id]/members` (sin cambios).
+
+### Gestión del código (solo QUINIELA_ADMIN)
+
+Tarjeta en `configuracion/page.tsx` que muestra el `inviteCode` con formato monospace, botón copiar y botón regenerar.
+
+`POST /api/quinielas/[id]/invite-code/regenerate`:
+- Requiere `isAdminOf` o `SUPER_ADMIN`.
+- Genera nuevo `nanoid(8).toUpperCase()` con retry ante colisión `P2002` (máx 5 intentos).
+- El código anterior deja de funcionar **de inmediato**.
+- AuditLog: `action: 'INVITE_CODE_REGENERATED'` con old/new value.
+
+### UI del botón "Unirme a una quiniela"
+
+`src/components/JoinByCodeButton.tsx` — diseño pill con gradiente esmeralda, ícono de ticket animado. Al pulsar, abre una tarjeta inline con input monospace grande (placeholder: `EJ. AMISTOSOS2026`), botón flecha y X para cancelar. Animación de entrada `tw-animate-css`.
+
+El **SUPER_ADMIN no ve este botón** — en el hero del listado de quinielas ve solo "Crear quiniela", ya que él crea y ve todas sin necesidad de código.
+
+### Sin migración de BD
+
+`visibility` + `inviteCode` ya existían. Las quinielas creadas con el script de seed ya nacen con código. Las que tengan `inviteCode: null` (legado) muestran "Sin código" en config con botón "Generar código".
+
+**Estado en producción (mayo 2026):**
+
+| Quiniela | Status | inviteCode |
+|---|---|---|
+| Ki-Niela Amistosos Internacionales | ACTIVE | `AMISTOSOS2026` |
+| Ki-Niela Mundial 2026 | ARCHIVED | `MUNDIAL2026` |
+| DP-TI COPA MUNDO 2026 | ARCHIVED | `DPTI2026` |
+
+**Archivos:**
+- `src/app/api/quinielas/join/route.ts` (nuevo)
+- `src/app/api/quinielas/[quinielaId]/invite-code/regenerate/route.ts` (nuevo)
+- `src/components/JoinByCodeButton.tsx` (nuevo)
+- `src/app/quinielas/page.tsx` — quitado browse público, agregado botón y empty-state contextual.
+- `src/app/quinielas/[quinielaId]/configuracion/page.tsx` — tarjeta de código.
+
+---
+
+## 16. Admin/usuarios: membresías y filtro por quiniela
+
+### Necesidad
+
+Con múltiples quinielas en producción, el SUPER_ADMIN necesitaba saber **quién está unido a qué quiniela** y en qué estado, sin tener que abrir cada quiniela individualmente.
+
+### Cambios
+
+**`GET /api/admin/users`** ahora incluye `memberships[]` por cada usuario:
+
+```json
+{
+  "id": "...",
+  "name": "Adrian Ruiz",
+  "memberships": [
+    {
+      "quinielaId": "...",
+      "quinielaName": "Ki-Niela Amistosos Internacionales",
+      "quinielaStatus": "ACTIVE",
+      "memberStatus": "ACTIVE",
+      "memberRole": "PARTICIPANT"
+    }
+  ]
+}
+```
+
+**Tabla de usuarios en `/admin/usuarios`:**
+- Nueva columna **"Quinielas"** con badge de estado del miembro (Activo / Pendiente / Invitado / Inactivo / Rechazado — cada uno con su color), nombre de la quiniela (tachado y gris si archivada), y ★ si el usuario es `QUINIELA_ADMIN` en esa quiniela.
+- Si el usuario no tiene membresías: "Ninguna" en cursiva.
+
+**Filtro "Quiniela"** (selector a la derecha de Todos/Pendientes/Activos):
+- "Todas las quinielas" (default) — lista todos con sus membresías.
+- Seleccionar una quiniela concreta — lista **solo los usuarios de esa quiniela** (activas y archivadas incluidas). La columna resalta esa membresía.
+- Se combina con el filtro de estado global (ej. "Activos" + quiniela X = usuarios activos en X).
+
+**Archivos:**
+- `src/app/api/admin/users/route.ts` — agrega `quinielaMembers` a la query Prisma, aplanado al shape `memberships[]`.
+- `src/app/admin/usuarios/page.tsx` — tipos `Membership`, estado `quinielaFilter`, columna y selector.
+
+---
+
+## 17. Setup local + troubleshooting
 
 ### Setup
 
@@ -459,9 +615,24 @@ npm run dev   # http://localhost:3001
 #### Bot no genera predicciones
 1. `Quiniela.randomPredictionsEnabled === true`
 2. `QuinielaMember.autoPredictionsEnabled === true` para ese user
-3. `QuinielaMember.status === 'ACTIVE'`
+3. `QuinielaMember.status === 'ACTIVE'` y `role === 'PARTICIPANT'` (QUINIELA_ADMIN no recibe bot por diseño)
 4. No hay predicción previa para ese match
-5. Cron `/api/jobs/generate-random-predictions` está corriendo
+5. El partido llegó a su ventana de bloqueo (`Date.now() >= kickoff - lockMinutes * 60_000`)
+6. Cron `/api/jobs/generate-random-predictions` está corriendo
+
+> Si el cron de sync-live-scores corrió primero y cambió el status a `EN_JUEGO`, el bot sigue funcionando porque evalúa la ventana temporal, no el status.
+
+#### Un usuario no ve una quiniela (aislamiento)
+- Si el usuario no tiene fila `QuinielaMember` en esa quiniela, no la verá. Solución: darle el código de invitación o que el admin lo agregue desde la página de participantes.
+- Si tiene el código pero la quiniela está `ARCHIVED` o `CLOSED`, el `POST /api/quinielas/join` rechaza con 400 "La quiniela no está abierta."
+- Si tenía membresía `INACTIVE` o `REJECTED`, el código no reactiva solo: un admin debe activarlo manualmente.
+
+#### El botón "Unirme a una quiniela" no aparece
+- Si el usuario tiene `globalRole === 'SUPER_ADMIN'`, el botón está oculto por diseño (el admin crea quinielas, no se une por código).
+
+#### El código de invitación ya no funciona
+- El admin puede haber regenerado el código. Pedir el nuevo desde Config → Código de invitación.
+- Si se ingresa un código de una quiniela archivada: "La quiniela no está abierta."
 
 #### Posiciones vacío pero el dashboard dice "Posición 1"
 - Versión vieja: ya resuelto en §8. Si reaparece: revisar que ambos endpoints (`/leaderboard` y dashboard) excluyen `globalRole=SUPER_ADMIN` y agregan tail de members activos sin scores.
@@ -514,3 +685,9 @@ npm run dev   # http://localhost:3001
 | `5ceb0e6` | fix(admin/partidos): alias Catar para Qatar (ESPN en/es) |
 | `51a86f8` | fix(live-sync): reconciliar orientación home/away contra ESPN |
 | `fcae53c` | fix(scripts): idempotencia en fix-orientation + verify-and-recalc integral |
+| `fbb3e37` | fix(competidores): filtrar QUINIELA_ADMIN en leaderboard, dashboard, bot, matrix |
+| `5da5742` | fix(competidores): conservar Scores de admin, solo NO contarlos en posiciones |
+| `f4c8229` | feat(quinielas): aislar por usuario + unirse por código de invitación |
+| `aba5952` | style(quinielas): botón "Unirme a una quiniela" más vistoso y amigable |
+| `eea1c05` | fix(quinielas): ocultar "Unirme con código" al SUPER_ADMIN |
+| `e500a2a` | feat(admin/usuarios): ver quinielas de cada usuario + filtro por quiniela |
