@@ -12,13 +12,32 @@ type Props = {
   onBlur?: (matchId: string) => void
 }
 
+// Teclas de control permitidas (navegación, borrado, copiar/pegar).
+const ALLOWED_KEYS = new Set([
+  'Backspace', 'Delete', 'Tab', 'Enter', 'Escape',
+  'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End',
+])
+
+// Bloquea en desktop la digitación de teclas no numéricas (letras, "e", "+",
+// "-", ".", ","). En móvil inputMode="numeric" ya muestra teclado numérico.
+function blockNonNumericKeys(e: React.KeyboardEvent<HTMLInputElement>) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return // copiar/pegar/atajos
+  if (ALLOWED_KEYS.has(e.key)) return
+  if (!/^[0-9]$/.test(e.key)) e.preventDefault()
+}
+
 export function PredictionInput({ matchId, initialHome, initialAway, locked, onSave, onBlur }: Props) {
   const [home, setHome] = useState<string>(initialHome !== undefined ? String(initialHome) : '')
   const [away, setAway] = useState<string>(initialAway !== undefined ? String(initialAway) : '')
 
-  function handleChange(field: 'home' | 'away', value: string) {
+  function handleChange(field: 'home' | 'away', rawValue: string) {
+    // Solo dígitos: descarta letras, signos, puntos, "e", espacios, etc.
+    // Mantiene como máximo 2 dígitos (marcador 0-20 → la validación de rango
+    // se aplica abajo).
+    const value = rawValue.replace(/\D/g, '').slice(0, 2)
+
     const num = parseInt(value, 10)
-    if (value !== '' && (isNaN(num) || num < 0)) return
+    if (value !== '' && (isNaN(num) || num < 0 || num > 20)) return
 
     const nextHome = field === 'home' ? value : home
     const nextAway = field === 'away' ? value : away
@@ -61,10 +80,12 @@ export function PredictionInput({ matchId, initialHome, initialAway, locked, onS
   return (
     <div className="flex items-center gap-2">
       <Input
-        type="number"
-        min={0}
-        max={20}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={2}
         value={home}
+        onKeyDown={blockNonNumericKeys}
         onChange={(e) => handleChange('home', e.target.value)}
         onBlur={handleBlur}
         disabled={locked}
@@ -73,10 +94,12 @@ export function PredictionInput({ matchId, initialHome, initialAway, locked, onS
       />
       <span className="text-gray-400 font-bold">-</span>
       <Input
-        type="number"
-        min={0}
-        max={20}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={2}
         value={away}
+        onKeyDown={blockNonNumericKeys}
         onChange={(e) => handleChange('away', e.target.value)}
         onBlur={handleBlur}
         disabled={locked}
