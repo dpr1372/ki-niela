@@ -2,7 +2,7 @@
 
 Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qué**, el **por qué** y el **cómo probar/operar**. Para arquitectura general ver [`GUIA_COMPLETA.md`](GUIA_COMPLETA.md); para integración de marcadores ver [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md).
 
-> **Última revisión:** 2026-05-29
+> **Última revisión:** 2026-05-30
 
 ---
 
@@ -20,7 +20,8 @@ Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qu
 10. [Endpoint diagnóstico de mailer](#10-endpoint-diagnóstico-de-mailer)
 11. [Quiniela "DP-TI COPA MUNDO 2026" (clon del Mundial)](#12-quiniela-dp-ti-copa-mundo-2026-clon-del-mundial)
 12. [Bracket eliminatorio Mundial 2026 con calendario FIFA oficial](#13-bracket-eliminatorio-mundial-2026-con-calendario-fifa-oficial)
-13. [Setup local + troubleshooting](#11-setup-local--troubleshooting)
+13. [Sincronización ESPN: reconciliar orientación home/away](#14-sincronización-espn-reconciliar-orientación-homeaway)
+14. [Setup local + troubleshooting](#11-setup-local--troubleshooting)
 
 ---
 
@@ -354,6 +355,78 @@ Después del **27 jun 2026** (fin de fase de grupos):
 
 ---
 
+## 14. Sincronización ESPN: reconciliar orientación home/away
+
+### Problema
+
+ESPN puede listar un partido con **local/visitante en orden opuesto** al
+calendario de Ki-Niela. Casos reales (30 may 2026, amistosos):
+
+- ESPN `Zimbabwe 1-0 India` ⟷ Ki-Niela tiene `India vs Zimbabwe`
+- ESPN `Scotland 4-1 Curacao` ⟷ Ki-Niela tiene `Curazao vs Escocia`
+
+El job `sync-live-scores` asignaba `fixture.homeGoals → liveHomeGoals` **por
+posición ciega**, sin verificar que el "home" de ESPN fuera el mismo "home" de
+Ki-Niela. Resultado: **marcadores invertidos** (mostraba que ganó India cuando
+ganó Zimbabwe) y **puntos calculados al revés** — los que predijeron al ganador
+real quedaban en 0 y viceversa.
+
+### Decisión de diseño
+
+La orientación (quién es local) la manda el **calendario de Ki-Niela**, no
+ESPN. El sync **adapta** los goles de ESPN a nuestra orientación. **No** se
+reordena el calendario, porque eso invertiría las predicciones que los usuarios
+ya registraron.
+
+### Solución
+
+`src/lib/team-matching.ts` (nuevo) exporta `teamsMatch` / `normalize` /
+`TEAM_ALIASES`. Antes vivían solo en `src/app/admin/partidos/page.tsx`; se
+extrajeron para reusarlos en server jobs sin duplicar.
+
+`src/app/api/jobs/sync-live-scores/route.ts`:
+- La query trae `homeTeam`/`awayTeam`.
+- Si `teamsMatch(ourHome, fxAway) && teamsMatch(ourAway, fxHome)` (orientación
+  cruzada) y **no** coincide la orientación directa → voltea
+  `home`/`away` goals **y** penales antes de guardar y recalcular.
+- Conservador: solo voltea ante un cross-match con confianza; si los nombres no
+  resuelven, deja los goles tal cual.
+
+> **Alias de equipos:** si ESPN usa un nombre que `teamsMatch` no mapea, el sync
+> no voltea (seguro pero puede no detectar la inversión). Agregar el alias en
+> `TEAM_ALIASES`. Ya cubiertos: Switzerland/Suiza, Morocco/Marruecos,
+> Scotland/Escocia, Brazil/Brasil, Qatar/Catar.
+
+### Scripts de reparación y verificación
+
+Ambos **idempotentes**, dry-run por defecto, `--apply` para escribir:
+
+```bash
+# Repara goles invertidos en partidos ya finalizados + recalcula scores
+DATABASE_URL=<url> npx tsx scripts/fix-orientation.ts          # reporta
+DATABASE_URL=<url> npx tsx scripts/fix-orientation.ts --apply  # aplica
+
+# Verificación integral: orientación de TODOS los finalizados vs ESPN,
+# recálculo de scores en TODAS las quinielas (excluye SUPER_ADMIN) y
+# limpieza de scores huérfanos
+DATABASE_URL=<url> npx tsx scripts/verify-and-recalc.ts
+DATABASE_URL=<url> npx tsx scripts/verify-and-recalc.ts --apply
+```
+
+`fix-orientation.ts` compara los **goles guardados** contra ESPN-reorientado (no
+solo la orientación de equipos, que es permanente) — por eso re-correrlo no
+vuelve a voltear un marcador ya correcto.
+
+### Aplicado en producción (30 may 2026)
+
+- 2 partidos corregidos (Curazao 1-4 Escocia, India 0-1 Zimbabwe).
+- 18 predicciones recalculadas, 3 scores huérfanos eliminados.
+- Estado final: **0 discrepancias vs ESPN, 0 huérfanos**.
+- Los 3 partidos finalizados quedan en `FINALIZADO`, así que el cron no los
+  vuelve a tocar.
+
+---
+
 ## 11. Setup local + troubleshooting
 
 ### Setup
@@ -401,6 +474,11 @@ npm run dev   # http://localhost:3001
 #### Partido finalizado pero los puntos no se actualizaron
 - `POST /api/jobs/recalculate-scores` con `x-cron-secret` y body `{}` recalcula todo. Con `{ "matchId": "..." }` recalcula solo uno.
 
+#### El marcador / ganador aparece invertido vs ESPN
+- ESPN reporta el fixture con local/visitante al revés que el calendario. El sync ya reconcilia orientación (§14), pero para datos previos al fix: `npx tsx scripts/fix-orientation.ts` (dry-run) y luego `--apply`.
+- Si el sync **no** detecta la inversión, suele ser porque el nombre de ESPN no mapea: agregar el alias en `TEAM_ALIASES` (`src/lib/team-matching.ts`).
+- Verificación integral de todo: `npx tsx scripts/verify-and-recalc.ts`.
+
 ---
 
 ## Commits relevantes (cronológicos)
@@ -431,3 +509,8 @@ npm run dev   # http://localhost:3001
 | `0b485c8` | feat(seed): clonar quiniela "DP-TI COPA MUNDO 2026" |
 | `dbaa9ac` | feat(seed): script para sincronizar partidos estrella del Mundial 2026 |
 | `4bd314e` | feat(seed): bracket eliminatorio Mundial 2026 con calendario FIFA oficial |
+| `506e6d2` | fix(pronosticos): inputs de marcador solo aceptan números |
+| `18d2d2c` | fix(pronosticos): quitar tope arbitrario de 20 goles |
+| `5ceb0e6` | fix(admin/partidos): alias Catar para Qatar (ESPN en/es) |
+| `51a86f8` | fix(live-sync): reconciliar orientación home/away contra ESPN |
+| `fcae53c` | fix(scripts): idempotencia en fix-orientation + verify-and-recalc integral |

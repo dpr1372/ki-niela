@@ -78,6 +78,8 @@ npx tsx scripts/seed-amistosos.ts          # crear quiniela amistosos
 npx tsx scripts/seed-mundial-knockouts.ts  # bracket eliminatorio Mundial 2026 (calendario FIFA)
 npx tsx scripts/seed-dpti-mundial.ts       # clonar Mundial → "DP-TI COPA MUNDO 2026"
 npx tsx scripts/sync-mundial-stars.ts      # sincronizar partidos estrella entre quinielas Mundial
+npx tsx scripts/fix-orientation.ts         # reparar goles invertidos vs ESPN (dry-run; --apply escribe)
+npx tsx scripts/verify-and-recalc.ts       # verificar orientación + recalcular scores de todas las quinielas
 ```
 
 ## Deploy
