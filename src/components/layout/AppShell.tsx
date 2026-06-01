@@ -230,12 +230,24 @@ export default function AppShell({ children, quinielaId, quinielaName }: Props) 
           })}
         </aside>
 
-        <main className="flex-1 p-4 sm:p-6 overflow-auto">{children}</main>
+        {/*
+          pb extra en móvil para librar el bottom nav fijo (sm:hidden, ~64px)
+          y la safe-area inferior de iOS. Sin esto, la última parte del
+          contenido queda "cortada" detrás del nav. Solo cuando hay bottom nav
+          (quinielaId set); en desktop (sm+) el nav no existe → padding normal.
+        */}
+        <main
+          className={`flex-1 p-4 sm:p-6 overflow-auto ${
+            quinielaId ? 'pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-6' : ''
+          }`}
+        >
+          {children}
+        </main>
       </div>
 
       {/* Bottom nav mobile */}
       {quinielaId && (
-        <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-teal-200/50 flex justify-around z-40 shadow-[0_-2px_12px_rgba(8,51,68,0.10)]">
+        <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-teal-200/50 flex justify-around z-40 shadow-[0_-2px_12px_rgba(8,51,68,0.10)] pb-[env(safe-area-inset-bottom)]">
           {quinielaNaav.slice(0, 5).map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href)
             return (

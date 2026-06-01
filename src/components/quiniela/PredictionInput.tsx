@@ -32,8 +32,12 @@ export function PredictionInput({ matchId, initialHome, initialAway, locked, onS
 
   function handleChange(field: 'home' | 'away', rawValue: string) {
     // Solo dígitos: descarta letras, signos, puntos, "e", espacios, etc.
+    let value = rawValue.replace(/\D/g, '')
+    // Quita ceros a la izquierda para que "01" se vuelva "1", "00" → "0".
+    // Conserva un único "0" si el campo es exactamente cero.
+    value = value.replace(/^0+(?=\d)/, '')
     // Máximo 2 dígitos (un marcador no pasa de 99).
-    const value = rawValue.replace(/\D/g, '').slice(0, 2)
+    value = value.slice(0, 2)
 
     const num = parseInt(value, 10)
     if (value !== '' && (isNaN(num) || num < 0)) return
