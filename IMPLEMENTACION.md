@@ -2,7 +2,7 @@
 
 Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qué**, el **por qué** y el **cómo probar/operar**. Para arquitectura general ver [`GUIA_COMPLETA.md`](GUIA_COMPLETA.md); para integración de marcadores ver [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md).
 
-> **Última revisión:** 2026-05-31 (sesión 3) — cronjob del bot + badge visual
+> **Última revisión:** 2026-05-31 (sesión 4) — importar torneos ESPN + borrar quiniela + fix banderas
 
 ---
 
@@ -25,7 +25,10 @@ Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qu
 15. [Aislamiento de quinielas por usuario + código de invitación](#15-aislamiento-de-quinielas-por-usuario--código-de-invitación)
 16. [Admin/usuarios: membresías y filtro por quiniela](#16-adminusuarios-membresías-y-filtro-por-quiniela)
 17. [Badge morado del bot: indicador visual](#17-badge-morado-del-bot-indicador-visual)
-18. [Setup local + troubleshooting](#18-setup-local--troubleshooting)
+18. [Importar torneos desde ESPN (1 clic, multi-torneo, idempotente)](#18-importar-torneos-desde-espn-1-clic-multi-torneo-idempotente)
+19. [Borrar quiniela con doble confirmación](#19-borrar-quiniela-con-doble-confirmación)
+20. [Fix banderas: priorizar logos ESPN sobre helper FIFA](#20-fix-banderas-priorizar-logos-espn-sobre-helper-fifa)
+21. [Setup local + troubleshooting](#21-setup-local--troubleshooting)
 
 ---
 
@@ -629,7 +632,173 @@ El color **morado persistente** (p.e., `text-purple-500`, `bg-purple-50`) en tod
 
 ---
 
-## 18. Setup local + troubleshooting
+## 18. Importar torneos desde ESPN (1 clic, multi-torneo, idempotente)
+
+### Problema original
+
+Crear un nuevo torneo (Copa Libertadores, Champions, Copa Oro, etc.) requería ~350 líneas de script manual: seeding de equipos, estadios, partidos, jornadas. Implicaba:
+- Listas de equipos/sedes hardcodeadas.
+- Cálculo manual de fases a partir del calendario.
+- Re-ejecutar el script si se añadían más partidos (Copa Libertadores fase 2, etc.).
+- Mantenimiento: cambios en ESPN requería reescribir el script.
+
+### Solución: botón `/admin/torneos`
+
+Nuevo endpoint y página que permiten al SUPER_ADMIN crear un torneo completo desde ESPN en **1 clic**:
+
+1. **Dropdown de torneos:** 7 competiciones preconfiguradas
+   - Copa del Mundo FIFA
+   - UEFA Champions League
+   - Copa Oro CONCACAF
+   - Copa América CONMEBOL
+   - Eurocopa (UEFA Euro)
+   - Copa Libertadores CONMEBOL
+   - Amistosos Internacionales
+
+2. **Pickers de fecha:** "Desde" y "Hasta" (rango de búsqueda en ESPN).
+
+3. **Nombre de quiniela (opcional):** si no se ingresa, default `"Ki-Niela {nombre del torneo}"`.
+
+4. **Botones:**
+   - "Crear quiniela desde ESPN" — trae todos los partidos en el rango, crea Event/Team/Stadium/Matchday/Match/Quiniela.
+   - "Re-sincronizar partidos" — re-postea el mismo torneo/rango, trae fases nuevas (octavos, cuartos) cuando ESPN las publica. Idempotente: agrega partidos nuevos, actualiza los existentes, nunca duplica ni toca predicciones.
+
+### Archivos
+
+**Backend:**
+- `src/lib/tournaments.ts` — catálogo TOURNAMENTS[] + mapeo `season.slug` ESPN → MatchPhase.
+- `src/lib/live-providers/espn.ts` — `fetchFixturesForImport()` que devuelve ImportFixture[] con logos, venue, fase.
+- `src/lib/import-tournament.ts` — `importTournament({ slug, startDate, endDate, createdByUserId, quinielaName })` idempotente. Upsert por externalId (clave natural). Crea Event, Teams (dedup por normalize), Stadium, Matchday, Match, Quiniela + admin member + final-estrella.
+- `src/app/api/admin/tournaments/import/route.ts` — `POST /api/admin/tournaments/import` (gate SUPER_ADMIN).
+
+**Frontend:**
+- `src/app/admin/torneos/page.tsx` — UI con dropdowns, pickers, botones, toast con conteos.
+
+**Tests:**
+- `src/__tests__/import-tournament.test.ts` — 8 tests: phase mapping, catalog resolution, fixture import, externalId encoding, date ranges, missing competitors.
+
+### Características
+
+- **Idempotencia:** re-importar el mismo torneo+rango actualiza fechas/equipos de partidos existentes (por `externalId @unique`) sin duplicar ni borrar predicciones.
+- **Determinismo:** IDs de Event/Team/Stadium/Matchday son slugs estables (`evt-{slug}-{año}`, `tm-{eventId}-{abbr}`), así el mismo torneo siempre genera la misma estructura.
+- **Dedup de equipos:** `normalize()` evita crear Brasil y Brazil por separado.
+- **Sin placeholders manuales:** solo traes lo que ESPN ya tiene. Las fases futuras (KO) aparecen cuando ESPN las publica, luego re-sincronizás.
+- **Ventas en vivo:** `externalProvider: 'espn'`, `externalId: 'slug|eventId'` → el sync en vivo ya funciona sin cambios.
+
+### Botón "Torneos (Admin)" en el nav
+
+`src/components/layout/AppShell.tsx` ahora muestra "Torneos (Admin)" en el sidebar solo para SUPER_ADMIN, con ícono de trofeo.
+
+### Sin migración BD
+
+Todas las columnas ya existían (`externalId`, `externalProvider`, `liveSource`, `flagUrl`).
+
+---
+
+## 19. Borrar quiniela con doble confirmación
+
+### Necesidad
+
+El admin debe poder eliminar una quiniela sin destruir el torneo (si hay 2+ quinielas del mismo evento, la eliminación de una no toca Event/Match compartidos ni quinielas hermanas).
+
+### Solución: `DELETE /api/quinielas/[id]` + UI "Zona de peligro"
+
+**Endpoint:**
+- Auth: QUINIELA_ADMIN o SUPER_ADMIN de esa quiniela.
+- Body: `{ confirmName: "nombre exacto de la quiniela" }` — obliga a escribir el nombre para confirmar.
+- Borrado transaccional: Score → Prediction → StarMatch → Member → Quiniela (orden de dependencias).
+- **NO toca** Event/Team/Match/Stadium/Matchday → otras quinielas del mismo torneo quedan intactas.
+- AuditLog: `action: 'QUINIELA_DELETED'`.
+
+**UI ("Zona de peligro" en Configuración):**
+- Tarjeta roja con ícono de alerta.
+- Botón "Borrar esta quiniela" → abre un panel inline con input "Escribir el nombre para confirmar".
+- Botón "Confirmar borrado" deshabilitado hasta que el texto coincida exactamente.
+- Botón "Cancelar" cierra el panel.
+- Al confirmar: spinner, toast "Quiniela eliminada", redirige a `/quinielas`.
+
+**Archivos:**
+- `src/app/api/quinielas/[quinielaId]/route.ts` — nuevo `DELETE` export.
+- `src/app/quinielas/[quinielaId]/configuracion/page.tsx` — tarjeta "Zona de peligro", mutation DELETE, estado del panel.
+
+### Aislamiento garantizado
+
+El borrado **solo elimina filas de esa quiniela**:
+- `QuinielaMember.quinielaId = ?` ✓
+- `Prediction.quinielaId = ?` ✓
+- `Score.quinielaId = ?` ✓
+- `QuinielaStarMatch.quinielaId = ?` ✓
+- `Quiniela.id = ?` ✓
+
+NO afecta:
+- Event (compartido por otras quinielas del torneo)
+- Team/Stadium/Match/Matchday (compartido por otras quinielas del torneo)
+- Predicciones / Scores de otras quinielas
+
+### Probado
+
+Verificado en BD local: borrar una quiniela, confirmar que Event/Match/Teams de esa quiniela (pero otro en otra quiniela) quedan intactos.
+
+---
+
+## 20. Fix banderas: priorizar logos ESPN sobre helper FIFA
+
+### Problema original
+
+Cuando una quiniela de Libertadores trae equipos (clubs), sus códigos de 3 letras (FLU, LGA, CABJ, etc.) **no existen** en el mapeo FIFA→ISO. El helper `flagUrl(fifaCode)` devolvía `null` → **sin escudo visible** en pronósticos, dashboard y matriz de puntuación.
+
+Ejemplo: Fluminense tiene `fifaCode: "FLU"`, pero `flagUrl("FLU")` → `null` porque FIFA solo mapea países (ISO-2), no clubes.
+
+### Solución: priorizar `team.flagUrl` (ESPN) sobre helper FIFA
+
+**Patrón:** en las 3 vistas, cambiar de:
+```ts
+const url = flagUrl(fifaCode)  // solo helper
+```
+
+A:
+```ts
+const url = flagUrl ?? flagUrl(fifaCode)  // prioriza ESPN, cae al helper
+```
+
+**Archivos tocados:**
+
+| Archivo | Vista | Cambio |
+|---------|-------|--------|
+| `src/app/quinielas/[id]/pronosticos/page.tsx` | Pronósticos | TeamSide recibe `flag` prop |
+| `src/app/quinielas/[id]/dashboard/page.tsx` | Dashboard | FlagPill recibe `flag` prop |
+| `src/components/quiniela/PredictionMatrix.tsx` | Matriz | FlagBadge recibe `flag` prop |
+| `src/app/api/quinielas/[id]/prediction-matrix/route.ts` | Matriz API | Devuelve `homeFlag` / `awayFlag` |
+
+**Tipo de dato del select en las APIs:**
+- `homeTeam: { select: { name, fifaCode, flagUrl } }`
+- `awayTeam: { select: { name, fifaCode, flagUrl } }`
+
+**Critical fix: `next.config.ts`**
+El config solo permitía `flagcdn.com`. Agregué `a.espncdn.com` (dominio de logos ESPN) a `images.remotePatterns`:
+
+```ts
+images: {
+  remotePatterns: [
+    { protocol: 'https', hostname: 'flagcdn.com' },
+    { protocol: 'https', hostname: 'a.espncdn.com' },
+  ],
+}
+```
+
+Sin esto, `<Image>` rechaza URLs de ESPN en runtime → sin escudo en ninguna vista.
+
+### Resultado
+
+Ahora Libertadores (clubes) y Champions League (también clubes) muestran sus escudos reales de ESPN en **todas las vistas** (pronósticos, en vivo, matriz, dashboard). Fallback a FIFA si ESPN no tiene logo.
+
+### Probado
+
+Verificado end-to-end en BD local con Libertadores: imports traen `flagUrl` de ESPN (ej. `https://a.espncdn.com/i/teamlogos/soccer/500/2690.png`), las URLs resuelven HTTP 200, y se renderizan en <Image> sin errores.
+
+---
+
+## 21. Setup local + troubleshooting
 
 ### Setup
 
@@ -739,3 +908,4 @@ npm run dev   # http://localhost:3001
 | `e500a2a` | feat(admin/usuarios): ver quinielas de cada usuario + filtro por quiniela |
 | `ab137d1` | fix(pronosticos): cero a la izquierda + scroll cortado en móvil |
 | `f380505` | feat(bot): badge morado consistente para predicciones del bot |
+| `8b38d18` | feat: importar torneos desde ESPN + borrar quiniela + fix banderas (#1) |

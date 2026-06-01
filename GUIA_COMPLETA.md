@@ -1,7 +1,7 @@
 # 🏆 Ki-Niela: Guía Completa para Desarrolladores
 
-**Versión:** 1.1
-**Última actualización:** 2026-05-29
+**Versión:** 1.2
+**Última actualización:** 2026-05-31
 **Audiencia:** Programadores de cualquier nivel (junior → senior)
 
 ---
@@ -31,11 +31,14 @@ Una plataforma web de **quinielas deportivas recreativas** (sin dinero real, sol
 
 ### Características Principales
 
-✅ **Multi-evento**: Soporta varios eventos simultáneamente (Mundial 2026, Amistosos, Copa América, etc.)  
-✅ **Multi-quiniela**: Varias quinielas por evento (Familiar, Amigos, Oficina, etc.)  
+✅ **Multi-evento**: Soporta cualquier competición — create en 1 clic desde ESPN (Champions, Copa Oro, Copa América, Eurocopa, Libertadores, Mundial, Amistosos)  
+✅ **Multi-quiniela**: Varias quinielas por evento (Familiar, Amigos, Oficina, etc.) con aislamiento total  
 ✅ **Roles flexibles**: Super Admin, Admin por quiniela, Participantes  
+✅ **Importar torneos desde ESPN**: Trae automáticamente equipos, estadios, partidos, fases. Re-sincroniza sin duplicar.  
+✅ **Borrar quiniela**: Solo admin, con doble confirmación. No afecta el torneo ni otras quinielas.  
 ✅ **Pronósticos automáticos**: Bot genera predicciones aleatorias si el usuario lo permite  
 ✅ **Cálculo automático de puntos**: Sistema automático basado en resultados oficiales  
+✅ **Banderas/escudos en vivo**: Logos de equipos (clubes y selecciones) de ESPN en pronósticos, matriz y dashboard  
 ✅ **Responsive**: Mobile-first, compatible Android/iOS/Web  
 ✅ **PWA**: Puede instalarse como app en dispositivos  
 

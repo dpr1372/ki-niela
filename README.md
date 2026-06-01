@@ -7,12 +7,15 @@ Plataforma web (Next.js + PostgreSQL) para quinielas deportivas **recreativas** 
 ## Características
 
 - **Multi-evento / multi-quiniela** — un usuario puede participar en varias quinielas del mismo o de distintos eventos.
+- **Importar torneos desde ESPN** — 1 clic desde `/admin/torneos` para crear un torneo completo (equipos, estadios, partidos) de cualquier competición (Champions, Copa Oro, Copa América, Eurocopa, Libertadores, Mundial, Amistosos). Idempotente: re-sincronizar trae fases nuevas sin duplicar.
 - **Pronósticos por partido** con autosave (debounce 350 ms, beacon en navegación), bloqueo individual 10 min antes del kickoff.
 - **Bot de pronósticos aleatorios** con doble compuerta: el admin lo activa por quiniela y cada participante lo activa para sí mismo. Independiente del status del partido (ventana temporal, no status=BLOQUEADO).
 - **Cálculo automático de puntos** (3/1/0 normal, 5/3/0 estrella; en eliminatorias cuenta el marcador a 90' o 120', no penales).
-- **Marcadores en vivo** desde ESPN (sin API key) vía cron cada minuto, con override manual por partido.
+- **Marcadores en vivo** desde ESPN (sin API key) vía cron cada minuto, con override manual por partido. Liga a cualquier torneo importado automáticamente.
 - **Posiciones** general / por día / por jornada / por fase. Solo `PARTICIPANT` compite — `QUINIELA_ADMIN` y `SUPER_ADMIN` excluidos del ranking.
 - **Aislamiento por quiniela**: cada usuario ve solo las quinielas donde es miembro. Acceso por código de invitación (auto-servicio) o el admin los agrega directamente.
+- **Borrar quiniela** (solo admin) con doble confirmación — borra solo lo de esa quiniela, no afecta Event/Match compartidos por torneo.
+- **Banderas/escudos de equipos** — prioriza logos de ESPN para clubes + selecciones; fallback a mapeo FIFA cuando es necesario.
 - **Emails transaccionales** vía Brevo HTTP API (compatible con Railway, que bloquea SMTP outbound).
 - **Mobile-first**, responsive, instalable como PWA.
 
