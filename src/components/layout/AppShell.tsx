@@ -51,6 +51,7 @@ export default function AppShell({ children, quinielaId, quinielaName }: Props) 
     { href: '/quinielas', label: 'Mis Quinielas', icon: Home },
     ...(isSuperAdmin && !quinielaId
       ? [
+          { href: '/admin/torneos', label: 'Torneos (Admin)', icon: Trophy },
           { href: '/admin/usuarios', label: 'Usuarios (Admin)', icon: ShieldCheck },
           { href: '/admin/partidos', label: 'Partidos (Admin)', icon: Link2 },
         ]

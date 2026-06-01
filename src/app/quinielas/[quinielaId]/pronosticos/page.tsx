@@ -21,8 +21,8 @@ type Match = {
   kickoffAtUtc: string
   kickoffAtCostaRica: string
   status: string
-  homeTeam?: { name: string; fifaCode?: string }
-  awayTeam?: { name: string; fifaCode?: string }
+  homeTeam?: { name: string; fifaCode?: string; flagUrl?: string | null }
+  awayTeam?: { name: string; fifaCode?: string; flagUrl?: string | null }
   placeholderHomeName?: string
   placeholderAwayName?: string
   matchday?: { id: string; name: string; number: number; phase: string }
@@ -88,8 +88,10 @@ function crTime(iso: string) {
   })
 }
 
-function TeamSide({ name, fifaCode, placeholder, side }: { name?: string; fifaCode?: string; placeholder?: string; side: 'home' | 'away' }) {
-  const url = flagUrl(fifaCode)
+function TeamSide({ name, fifaCode, flag, placeholder, side }: { name?: string; fifaCode?: string; flag?: string | null; placeholder?: string; side: 'home' | 'away' }) {
+  // Prioriza el escudo/bandera de ESPN (clubes y selecciones); cae al helper
+  // FIFA→flagcdn solo si no hay URL (mismo patrón que en-vivo y MatchCard).
+  const url = flag ?? flagUrl(fifaCode)
   const label = name ?? placeholder ?? '?'
   const code = fifaCode ?? (label.length <= 3 ? label : label.slice(0, 3).toUpperCase())
   return (
@@ -334,6 +336,7 @@ export default function PronosticosPage() {
                             <TeamSide
                               name={match.homeTeam?.name}
                               fifaCode={match.homeTeam?.fifaCode}
+                              flag={match.homeTeam?.flagUrl}
                               placeholder={match.placeholderHomeName}
                               side="home"
                             />
@@ -370,6 +373,7 @@ export default function PronosticosPage() {
                             <TeamSide
                               name={match.awayTeam?.name}
                               fifaCode={match.awayTeam?.fifaCode}
+                              flag={match.awayTeam?.flagUrl}
                               placeholder={match.placeholderAwayName}
                               side="away"
                             />

@@ -13,8 +13,8 @@ import { formatCostaRica } from '@/lib/timezone'
 import { flagUrl } from '@/lib/flags'
 import { MyAutoPredictionsToggle } from '@/components/MyAutoPredictionsToggle'
 
-function FlagPill({ fifaCode, name }: { fifaCode?: string | null; name: string }) {
-  const url = flagUrl(fifaCode)
+function FlagPill({ fifaCode, flag, name }: { fifaCode?: string | null; flag?: string | null; name: string }) {
+  const url = flag ?? flagUrl(fifaCode)
   return (
     <span className="inline-flex items-center gap-1.5">
       {url ? (
@@ -204,9 +204,9 @@ export default async function DashboardPage({
                     <div>
                       <p className="text-sm font-bold flex items-center gap-1.5 flex-wrap">
                         {isStar && <Star size={14} className="text-yellow-500 fill-yellow-400" />}
-                        <FlagPill fifaCode={m.homeTeam?.fifaCode} name={m.homeTeam?.name ?? m.placeholderHomeName ?? '?'} />
+                        <FlagPill fifaCode={m.homeTeam?.fifaCode} flag={m.homeTeam?.flagUrl} name={m.homeTeam?.name ?? m.placeholderHomeName ?? '?'} />
                         <span className="text-gray-400 font-normal">vs</span>
-                        <FlagPill fifaCode={m.awayTeam?.fifaCode} name={m.awayTeam?.name ?? m.placeholderAwayName ?? '?'} />
+                        <FlagPill fifaCode={m.awayTeam?.fifaCode} flag={m.awayTeam?.flagUrl} name={m.awayTeam?.name ?? m.placeholderAwayName ?? '?'} />
                       </p>
                       <p className="text-[11px] text-gray-500 mt-0.5">
                         {formatCostaRica(m.kickoffAtUtc, 'dd/MM/yyyy HH:mm')} CR

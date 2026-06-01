@@ -12,6 +12,8 @@ type MatchHeader = {
   awayTeam: string
   homeFifa?: string | null
   awayFifa?: string | null
+  homeFlag?: string | null
+  awayFlag?: string | null
   officialHome?: number | null
   officialAway?: number | null
   status: string
@@ -49,8 +51,8 @@ function initials(name: string) {
   return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? '')).toUpperCase()
 }
 
-function FlagBadge({ code, name }: { code?: string | null; name: string }) {
-  const url = flagUrl(code ?? undefined)
+function FlagBadge({ code, flag, name }: { code?: string | null; flag?: string | null; name: string }) {
+  const url = flag ?? flagUrl(code ?? undefined)
   if (url) {
     return <Image src={url} alt={name} width={22} height={16} className="rounded-sm border border-gray-200 inline-block" unoptimized />
   }
@@ -87,9 +89,9 @@ export function PredictionMatrix({ matches, rows }: Props) {
                 <th key={m.id} className="px-2 py-2 text-center font-medium min-w-[96px] border-l border-blue-800">
                   <div className="flex items-center justify-center gap-1 mb-1">
                     {m.isStar && <Star size={11} className="text-yellow-400 fill-yellow-300" />}
-                    <FlagBadge code={m.homeFifa} name={m.homeTeam} />
+                    <FlagBadge code={m.homeFifa} flag={m.homeFlag} name={m.homeTeam} />
                     <span className="text-[10px] font-bold opacity-75">vs</span>
-                    <FlagBadge code={m.awayFifa} name={m.awayTeam} />
+                    <FlagBadge code={m.awayFifa} flag={m.awayFlag} name={m.awayTeam} />
                   </div>
                   {hasOfficial ? (
                     <div className="font-black text-yellow-300 text-sm tabular-nums">

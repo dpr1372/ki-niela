@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Star } from 'lucide-react'
+import { Star, Trash2, AlertTriangle } from 'lucide-react'
 import { BallLoader } from '@/components/ui/BallLoader'
 
 const PHASE_TABS: Array<{ key: string; label: string }> = [
@@ -81,6 +81,11 @@ export default function ConfiguracionPage() {
   const params = useParams<{ quinielaId: string }>()
   const quinielaId = params.quinielaId
   const qc = useQueryClient()
+  const router = useRouter()
+
+  // Borrado de quiniela: doble confirmación (abrir panel + escribir el nombre).
+  const [showDelete, setShowDelete] = useState(false)
+  const [deleteConfirmName, setDeleteConfirmName] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['quiniela', quinielaId],
@@ -188,7 +193,27 @@ export default function ConfiguracionPage() {
     onError: (err: Error) => toast.error(err.message),
   })
 
+  const deleteQuiniela = useMutation({
+    mutationFn: async (confirmName: string) => {
+      const res = await fetch(`/api/quinielas/${quinielaId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmName }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? 'No se pudo borrar la quiniela.')
+      return json
+    },
+    onSuccess: (json) => {
+      toast.success(json.message ?? 'Quiniela eliminada.')
+      qc.invalidateQueries({ queryKey: ['quinielas'] })
+      router.push('/quinielas')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
   const inviteCode: string | null = data?.quiniela?.inviteCode ?? null
+  const quinielaName: string = data?.quiniela?.name ?? ''
 
   if (isLoading) {
     return (
@@ -383,6 +408,70 @@ export default function ConfiguracionPage() {
               )
             })}
           </div>
+        </div>
+
+        {/* Zona de peligro: borrar la quiniela (doble confirmación). */}
+        <div className="rounded-xl border-2 border-red-200 bg-red-50/50 p-5 space-y-3">
+          <h2 className="font-semibold text-red-800 flex items-center gap-2">
+            <AlertTriangle size={18} className="text-red-600" />
+            Zona de peligro
+          </h2>
+          <p className="text-xs text-red-700/80">
+            Borrar la quiniela elimina sus participantes, pronósticos y puntos de
+            forma permanente. No afecta el calendario del torneo ni otras quinielas
+            del mismo evento. Esta acción no se puede deshacer.
+          </p>
+
+          {!showDelete ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="border-red-300 text-red-700 hover:bg-red-100"
+              onClick={() => {
+                setShowDelete(true)
+                setDeleteConfirmName('')
+              }}
+            >
+              <Trash2 size={16} /> Borrar esta quiniela
+            </Button>
+          ) : (
+            <div className="space-y-3 rounded-lg border border-red-300 bg-white p-4">
+              <p className="text-sm text-gray-800">
+                Para confirmar, escribe el nombre exacto de la quiniela:
+                <br />
+                <code className="font-mono font-bold text-red-700">{quinielaName}</code>
+              </p>
+              <Input
+                value={deleteConfirmName}
+                onChange={(e) => setDeleteConfirmName(e.target.value)}
+                placeholder="Nombre de la quiniela"
+                autoFocus
+                disabled={deleteQuiniela.isPending}
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  className="bg-red-600 text-white hover:bg-red-700"
+                  disabled={deleteConfirmName.trim() !== quinielaName || deleteQuiniela.isPending}
+                  onClick={() => deleteQuiniela.mutate(deleteConfirmName.trim())}
+                >
+                  <Trash2 size={16} />
+                  {deleteQuiniela.isPending ? 'Borrando…' : 'Confirmar borrado'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={deleteQuiniela.isPending}
+                  onClick={() => {
+                    setShowDelete(false)
+                    setDeleteConfirmName('')
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </AppShell>
