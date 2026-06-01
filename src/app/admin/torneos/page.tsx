@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -10,8 +10,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BallLoader } from '@/components/ui/BallLoader'
-import { Trophy, Download, RefreshCw, ExternalLink } from 'lucide-react'
+import { Trophy, Download, RefreshCw, ExternalLink, Paintbrush } from 'lucide-react'
 import { TOURNAMENTS } from '@/lib/tournaments'
+
+type EventSummary = {
+  id: string
+  name: string
+  bannerLabel: string | null
+  bannerSubtitle: string | null
+  bannerLogoUrl: string | null
+}
 
 type ImportResult = {
   eventId: string
@@ -46,6 +54,64 @@ export default function AdminTorneosPage() {
   const [quinielaName, setQuinielaName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [lastResult, setLastResult] = useState<ImportResult | null>(null)
+
+  // Banner editor state
+  const [events, setEvents] = useState<EventSummary[]>([])
+  const [selectedEventId, setSelectedEventId] = useState<string>('')
+  const [bannerLabel, setBannerLabel] = useState('')
+  const [bannerSubtitle, setBannerSubtitle] = useState('')
+  const [bannerLogoUrl, setBannerLogoUrl] = useState('')
+  const [savingBanner, setSavingBanner] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/events')
+      .then((r) => r.json())
+      .then((data: EventSummary[]) => {
+        setEvents(data)
+        if (data.length > 0) {
+          const first = data[0]
+          setSelectedEventId(first.id)
+          setBannerLabel(first.bannerLabel ?? '')
+          setBannerSubtitle(first.bannerSubtitle ?? '')
+          setBannerLogoUrl(first.bannerLogoUrl ?? '')
+        }
+      })
+      .catch(() => toast.error('No se pudo cargar la lista de eventos.'))
+  }, [])
+
+  function onSelectEvent(id: string) {
+    setSelectedEventId(id)
+    const ev = events.find((e) => e.id === id)
+    if (ev) {
+      setBannerLabel(ev.bannerLabel ?? '')
+      setBannerSubtitle(ev.bannerSubtitle ?? '')
+      setBannerLogoUrl(ev.bannerLogoUrl ?? '')
+    }
+  }
+
+  async function saveBanner() {
+    if (!selectedEventId) return
+    setSavingBanner(true)
+    try {
+      const res = await fetch(`/api/admin/events/${selectedEventId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bannerLabel: bannerLabel.trim() || null,
+          bannerSubtitle: bannerSubtitle.trim() || null,
+          bannerLogoUrl: bannerLogoUrl.trim() || null,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const updated: EventSummary = await res.json()
+      setEvents((prev) => prev.map((e) => (e.id === updated.id ? { ...e, ...updated } : e)))
+      toast.success('Banner actualizado.')
+    } catch {
+      toast.error('No se pudo guardar el banner.')
+    } finally {
+      setSavingBanner(false)
+    }
+  }
 
   if (status === 'loading') {
     return (
@@ -192,6 +258,74 @@ export default function AdminTorneosPage() {
             {submitting && <span className="text-sm text-gray-500">Importando…</span>}
           </div>
         </div>
+
+        {/* ── Banner personalizado ─────────────────────────────────────────── */}
+        {events.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Paintbrush size={18} className="text-indigo-500" />
+              <h2 className="font-bold text-pitch-dark">Personalizar banner del torneo</h2>
+            </div>
+            <p className="text-xs text-gray-500">
+              Estos campos controlan el logo, la línea amarilla superior y el subtítulo del banner en "Mis Quinielas" y el Dashboard.
+              Dejar vacío usa los valores por defecto del Mundial.
+            </p>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bannerEvent">Evento</Label>
+              <select
+                id="bannerEvent"
+                value={selectedEventId}
+                onChange={(e) => onSelectEvent(e.target.value)}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring"
+              >
+                {events.map((e) => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bannerLabel">Línea amarilla (etiqueta superior)</Label>
+              <Input
+                id="bannerLabel"
+                type="text"
+                placeholder="ej. FIFA World Cup 2026 · MEX · USA · CAN"
+                value={bannerLabel}
+                onChange={(e) => setBannerLabel(e.target.value)}
+                disabled={savingBanner}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bannerSubtitle">Subtítulo</Label>
+              <Input
+                id="bannerSubtitle"
+                type="text"
+                placeholder="ej. Compite, predice y celebra cada gol del mundial."
+                value={bannerSubtitle}
+                onChange={(e) => setBannerSubtitle(e.target.value)}
+                disabled={savingBanner}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bannerLogoUrl">URL del logo (vacío = logo del Mundial por defecto)</Label>
+              <Input
+                id="bannerLogoUrl"
+                type="url"
+                placeholder="https://a.espncdn.com/i/leaguelogos/soccer/..."
+                value={bannerLogoUrl}
+                onChange={(e) => setBannerLogoUrl(e.target.value)}
+                disabled={savingBanner}
+              />
+            </div>
+
+            <Button onClick={saveBanner} disabled={savingBanner || !selectedEventId}>
+              <Paintbrush size={14} /> {savingBanner ? 'Guardando…' : 'Guardar banner'}
+            </Button>
+          </div>
+        )}
 
         {lastResult && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-2">

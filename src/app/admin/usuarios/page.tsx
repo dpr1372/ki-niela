@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import AppShell from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ShieldCheck, ShieldOff, UserCheck, UserX, Trophy } from 'lucide-react'
+import { ShieldCheck, ShieldOff, UserCheck, UserX, Trophy, Search } from 'lucide-react'
 import { BallLoader } from '@/components/ui/BallLoader'
 import { Switch } from '@/components/ui/switch'
 
@@ -71,6 +71,7 @@ export default function AdminUsuariosPage() {
   const [quinielas, setQuinielas] = useState<AdminQuiniela[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE'>('ALL')
+  const [nameFilter, setNameFilter] = useState<string>('')
   // Filtro por quiniela: 'ALL' = todas; o un quinielaId concreto.
   const [quinielaFilter, setQuinielaFilter] = useState<string>('ALL')
 
@@ -181,12 +182,17 @@ export default function AdminUsuariosPage() {
     return null
   }
 
+  const nameQ = nameFilter.trim().toLowerCase()
   const filtered = users?.filter((u) => {
     // Filtro de estado global de la cuenta.
     if (filter === 'PENDING' && u.status !== 'INACTIVE') return false
     if (filter === 'ACTIVE' && u.status !== 'ACTIVE') return false
     // Filtro por quiniela: solo usuarios que son miembros de la quiniela elegida.
     if (quinielaFilter !== 'ALL' && !u.memberships.some((m) => m.quinielaId === quinielaFilter)) {
+      return false
+    }
+    // Filtro por nombre o correo.
+    if (nameQ && !u.name.toLowerCase().includes(nameQ) && !u.email.toLowerCase().includes(nameQ)) {
       return false
     }
     return true
@@ -227,6 +233,17 @@ export default function AdminUsuariosPage() {
               {f.label}
             </Button>
           ))}
+
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar nombre o correo…"
+              value={nameFilter}
+              onChange={(e) => setNameFilter(e.target.value)}
+              className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white outline-none focus:border-emerald-500 w-52"
+            />
+          </div>
 
           {/* Filtro por quiniela: ver quién está unido a cada quiniela */}
           {quinielas && quinielas.length > 0 && (

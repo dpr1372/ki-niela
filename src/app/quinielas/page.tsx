@@ -43,7 +43,7 @@ export default async function MisQuinielasPage() {
     include: {
       quiniela: {
         include: {
-          event: { select: { id: true, name: true, sport: true } },
+          event: { select: { id: true, name: true, sport: true, bannerLabel: true, bannerSubtitle: true, bannerLogoUrl: true } },
           _count: { select: { members: { where: { status: 'ACTIVE', role: 'PARTICIPANT' } } } },
         },
       },
@@ -65,13 +65,20 @@ export default async function MisQuinielasPage() {
     byEvent.get(key)!.push(m)
   }
 
+  // Use banner fields from the first event the user belongs to (fallback to hardcoded Mundial defaults)
+  const firstEvent = memberships[0]?.quiniela.event
+  const heroBannerLabel = firstEvent?.bannerLabel ?? 'FIFA World Cup 2026 · MEX · USA · CAN'
+  const heroBannerSubtitle = firstEvent?.bannerSubtitle ?? 'Compite, predice y celebra cada gol del mundial.'
+  const heroBannerLogoUrl = firstEvent?.bannerLogoUrl ?? null
+
   return (
     <AppShell>
       <div className="space-y-6">
         <WorldCupHero
-          eventLabel="FIFA World Cup 2026 · MEX · USA · CAN"
+          eventLabel={heroBannerLabel}
           title="Mis Quinielas"
-          subtitle="Compite, predice y celebra cada gol del mundial."
+          subtitle={heroBannerSubtitle}
+          logoUrl={heroBannerLogoUrl}
           rightSlot={
             isSuperAdmin ? (
               <CrearQuinielaButton events={events} />

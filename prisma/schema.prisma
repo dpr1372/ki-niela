@@ -93,16 +93,19 @@ model User {
 }
 
 model Event {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  sport       String   @default("football")
-  startDate   DateTime
-  endDate     DateTime
-  timezone    String   @default("America/Costa_Rica")
-  status      String   @default("ACTIVE")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  sport           String   @default("football")
+  startDate       DateTime
+  endDate         DateTime
+  timezone        String   @default("America/Costa_Rica")
+  status          String   @default("ACTIVE")
+  bannerLabel     String?
+  bannerSubtitle  String?
+  bannerLogoUrl   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   quinielas  Quiniela[]
   teams      Team[]

@@ -20,7 +20,10 @@ async function main() {
   // ── Event ──────────────────────────────────────────────────────────────────
   const event = await prisma.event.upsert({
     where: { id: 'event-wc2026' },
-    update: {},
+    update: {
+      bannerLabel: 'FIFA World Cup 2026 · MEX · USA · CAN',
+      bannerSubtitle: 'Compite, predice y celebra cada gol del mundial.',
+    },
     create: {
       id: 'event-wc2026',
       name: 'FIFA World Cup 2026',
@@ -30,6 +33,8 @@ async function main() {
       endDate: new Date('2026-07-19T00:00:00Z'),
       timezone: 'America/Costa_Rica',
       status: 'ACTIVE',
+      bannerLabel: 'FIFA World Cup 2026 · MEX · USA · CAN',
+      bannerSubtitle: 'Compite, predice y celebra cada gol del mundial.',
     },
   })
 

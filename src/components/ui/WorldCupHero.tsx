@@ -1,25 +1,30 @@
 import Image from 'next/image'
 
+const DEFAULT_LOGO = '/wc2026/logo.png'
+
 type Props = {
   title: string
   subtitle?: string
   eventLabel?: string
+  logoUrl?: string | null
   rightSlot?: React.ReactNode
 }
 
-export function WorldCupHero({ title, subtitle, eventLabel, rightSlot }: Props) {
+export function WorldCupHero({ title, subtitle, eventLabel, logoUrl, rightSlot }: Props) {
+  const logo = logoUrl ?? DEFAULT_LOGO
   return (
     <div className="relative overflow-hidden rounded-2xl bg-worldcup-banner shadow-lg ring-1 ring-yellow-400/20">
       <div className="relative z-10 px-5 sm:px-7 py-5 sm:py-6 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <div className="shrink-0 drop-shadow-[0_4px_12px_rgba(0,0,0,0.45)]">
             <Image
-              src="/wc2026/logo.png"
-              alt="FIFA World Cup 2026"
+              src={logo}
+              alt={eventLabel ?? title}
               width={88}
               height={88}
               priority
               className="w-16 h-16 sm:w-20 sm:h-20 object-contain"
+              unoptimized={logo.startsWith('http')}
             />
           </div>
           <div className="min-w-0">

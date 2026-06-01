@@ -139,8 +139,10 @@ export default async function DashboardPage({
     <AppShell quinielaId={quinielaId} quinielaName={quiniela.name}>
       <div className="space-y-6">
         <WorldCupHero
-          eventLabel={quiniela.event.name}
+          eventLabel={quiniela.event.bannerLabel ?? quiniela.event.name}
           title={quiniela.name}
+          subtitle={quiniela.event.bannerSubtitle ?? undefined}
+          logoUrl={quiniela.event.bannerLogoUrl}
         />
 
         {/* Stats cards */}
