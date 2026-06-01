@@ -118,6 +118,16 @@ export default async function MisQuinielasPage() {
                           >
                             {STATUS_LABELS[m.status] ?? m.status}
                           </span>
+                          {m.quiniela.status === 'ARCHIVED' && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-400 text-white font-bold uppercase tracking-wide">
+                              Archivada
+                            </span>
+                          )}
+                          {m.quiniela.status === 'CLOSED' && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-600 text-white font-bold uppercase tracking-wide">
+                              Cerrada
+                            </span>
+                          )}
                           {m.role === 'QUINIELA_ADMIN' && (
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-400 text-blue-950 font-bold uppercase tracking-wide">
                               ★ Admin
