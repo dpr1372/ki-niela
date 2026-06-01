@@ -24,7 +24,7 @@ export function WorldCupHero({ title, subtitle, eventLabel, logoUrl, rightSlot }
               height={88}
               priority
               className="w-16 h-16 sm:w-20 sm:h-20 object-contain"
-              unoptimized={logo.startsWith('http')}
+              unoptimized={logo.startsWith('http') || logo.startsWith('data:')}
             />
           </div>
           <div className="min-w-0">

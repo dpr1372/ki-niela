@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BallLoader } from '@/components/ui/BallLoader'
-import { Trophy, Download, RefreshCw, ExternalLink, Paintbrush } from 'lucide-react'
+import { Trophy, Download, RefreshCw, ExternalLink, Paintbrush, Upload } from 'lucide-react'
 import { TOURNAMENTS } from '@/lib/tournaments'
 
 type EventSummary = {
@@ -87,6 +87,28 @@ export default function AdminTorneosPage() {
       setBannerSubtitle(ev.bannerSubtitle ?? '')
       setBannerLogoUrl(ev.bannerLogoUrl ?? '')
     }
+  }
+
+  // Convierte la imagen seleccionada a un data URL (base64) que se guarda en
+  // bannerLogoUrl. Filesystem de Railway es efímero, así que la imagen vive en BD.
+  function onPickLogo(file: File | undefined) {
+    if (!file) return
+    const MAX_BYTES = 800 * 1024 // 800 KB
+    if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(file.type)) {
+      toast.error('Formato no soportado. Usá PNG, JPG, WEBP o SVG.')
+      return
+    }
+    if (file.size > MAX_BYTES) {
+      toast.error(`La imagen pesa ${Math.round(file.size / 1024)} KB. Máximo 800 KB.`)
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setBannerLogoUrl(String(reader.result))
+      toast.success('Imagen cargada. No olvides "Guardar banner".')
+    }
+    reader.onerror = () => toast.error('No se pudo leer la imagen.')
+    reader.readAsDataURL(file)
   }
 
   async function saveBanner() {
@@ -310,15 +332,56 @@ export default function AdminTorneosPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="bannerLogoUrl">URL del logo (vacío = logo del Mundial por defecto)</Label>
-              <Input
-                id="bannerLogoUrl"
-                type="url"
-                placeholder="https://a.espncdn.com/i/leaguelogos/soccer/..."
-                value={bannerLogoUrl}
-                onChange={(e) => setBannerLogoUrl(e.target.value)}
-                disabled={savingBanner}
-              />
+              <Label htmlFor="bannerLogoUrl">Logo del banner (vacío = logo del Mundial por defecto)</Label>
+              <div className="flex items-start gap-3">
+                {bannerLogoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={bannerLogoUrl}
+                    alt="Vista previa del logo"
+                    className="w-14 h-14 rounded-lg border border-gray-200 object-contain bg-gray-50 shrink-0"
+                  />
+                )}
+                <div className="flex-1 space-y-2">
+                  <Input
+                    id="bannerLogoUrl"
+                    type="text"
+                    placeholder="Pegá una URL https://… o adjuntá una imagen"
+                    value={bannerLogoUrl.startsWith('data:') ? '(imagen adjunta)' : bannerLogoUrl}
+                    onChange={(e) => setBannerLogoUrl(e.target.value)}
+                    disabled={savingBanner || bannerLogoUrl.startsWith('data:')}
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label
+                      className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer hover:bg-gray-50"
+                    >
+                      <Upload size={14} /> Adjuntar imagen
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        className="hidden"
+                        disabled={savingBanner}
+                        onChange={(e) => onPickLogo(e.target.files?.[0])}
+                      />
+                    </label>
+                    {bannerLogoUrl && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setBannerLogoUrl('')}
+                        disabled={savingBanner}
+                      >
+                        Quitar
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    Recomendado: <b>cuadrado 160×160 px</b> (mín. 88×88), PNG o SVG con fondo transparente.
+                    El banner lo muestra a 64–80 px, así que un cuadrado nítido se ve mejor. Máximo 800 KB.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <Button onClick={saveBanner} disabled={savingBanner || !selectedEventId}>
