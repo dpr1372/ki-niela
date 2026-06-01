@@ -7,6 +7,7 @@ import Image from 'next/image'
 import AppShell from '@/components/layout/AppShell'
 import { PredictionInput } from '@/components/quiniela/PredictionInput'
 import { AutosaveStatus } from '@/components/quiniela/AutosaveStatus'
+import { BotBadge } from '@/components/quiniela/BotBadge'
 import { useAutosave } from '@/hooks/useAutosave'
 import { Star, Lock, BarChart2, Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { BallLoader } from '@/components/ui/BallLoader'
@@ -339,8 +340,14 @@ export default function PronosticosPage() {
 
                             <div className="shrink-0 flex flex-col items-center gap-1">
                               {locked ? (
-                                <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 border-gray-200 bg-gray-50 text-base font-black text-gray-700 min-w-[88px] justify-center shadow-inner">
-                                  <Lock size={12} className="text-gray-500" />
+                                <div
+                                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 text-base font-black min-w-[88px] justify-center shadow-inner ${
+                                    pred?.generatedByBot
+                                      ? 'border-purple-200 bg-purple-50 text-purple-800'
+                                      : 'border-gray-200 bg-gray-50 text-gray-700'
+                                  }`}
+                                >
+                                  <Lock size={12} className={pred?.generatedByBot ? 'text-purple-400' : 'text-gray-500'} />
                                   {pred ? `${pred.predictedHomeGoals} - ${pred.predictedAwayGoals}` : '—'}
                                 </div>
                               ) : hasTeams ? (
@@ -385,9 +392,7 @@ export default function PronosticosPage() {
                                 {hasOfficial ? 'Final' : 'En vivo'}: {hasOfficial ? match.officialHomeGoals : match.liveHomeGoals} - {hasOfficial ? match.officialAwayGoals : match.liveAwayGoals}
                               </span>
                             )}
-                            {pred?.generatedByBot && (
-                              <span className="text-[10px] text-purple-600 font-medium">Bot</span>
-                            )}
+                            {pred?.generatedByBot && <BotBadge />}
                             {!locked && hasTeams && <AutosaveStatus status={saveStatus} />}
                           </div>
                         </div>

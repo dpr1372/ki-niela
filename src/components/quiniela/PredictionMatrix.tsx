@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { Star } from 'lucide-react'
 import { flagUrl } from '@/lib/flags'
 import { Medal } from '@/components/ui/Medal'
+import { BotBadge } from '@/components/quiniela/BotBadge'
 
 type MatchHeader = {
   id: string
@@ -145,9 +146,7 @@ export function PredictionMatrix({ matches, rows }: Props) {
                             {cell.prediction.home}-{cell.prediction.away}
                           </div>
                           <div className="flex items-center justify-center gap-1 mt-1">
-                            {cell.prediction.isBot && (
-                              <span className="text-[8px] uppercase tracking-wider text-purple-600 font-bold">bot</span>
-                            )}
+                            {cell.prediction.isBot && <BotBadge variant="icon" size={11} />}
                             {cell.points !== null && (
                               <span className="text-[10px] font-bold tabular-nums">{cell.points}pt</span>
                             )}

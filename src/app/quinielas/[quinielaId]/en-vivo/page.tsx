@@ -5,8 +5,9 @@ import { useState } from 'react'
 import Image from 'next/image'
 import AppShell from '@/components/layout/AppShell'
 import { MatchStatusBadge } from '@/components/quiniela/MatchStatusBadge'
+import { BotBadge } from '@/components/quiniela/BotBadge'
 import { flagUrl } from '@/lib/flags'
-import { Star, Bot, User, Trophy, Radio, Wifi, WifiOff, Zap, UserCog } from 'lucide-react'
+import { Star, User, Trophy, Radio, Wifi, WifiOff, Zap, UserCog } from 'lucide-react'
 import { BallLoader } from '@/components/ui/BallLoader'
 import { useLivePredictions, type LiveMatch, type LiveProfile as Profile } from '@/hooks/useLivePredictions'
 
@@ -61,7 +62,7 @@ function ProfileRow({ profile, refHome, refAway }: { profile: Profile; refHome: 
     >
       <div className="flex items-center gap-2 min-w-0">
         {profile.generatedByBot ? (
-          <Bot size={14} className="text-purple-500 shrink-0" />
+          <BotBadge variant="icon" size={14} />
         ) : (
           <User size={14} className="text-gray-500 shrink-0" />
         )}
@@ -74,8 +75,11 @@ function ProfileRow({ profile, refHome, refAway }: { profile: Profile; refHome: 
       <div className="flex items-center gap-3 shrink-0">
         {profile.hasPrediction ? (
           profile.predictedHome !== null ? (
-            <span className="text-sm font-bold tabular-nums">
-              {profile.predictedHome} - {profile.predictedAway}
+            <span className="flex items-center gap-1.5">
+              <span className="text-sm font-bold tabular-nums">
+                {profile.predictedHome} - {profile.predictedAway}
+              </span>
+              {profile.generatedByBot && <BotBadge />}
             </span>
           ) : (
             <span className="text-xs text-gray-400 italic">oculto</span>
