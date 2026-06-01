@@ -1,7 +1,7 @@
 # 🏆 Ki-Niela: Guía Completa para Desarrolladores
 
-**Versión:** 1.2
-**Última actualización:** 2026-05-31
+**Versión:** 1.3
+**Última actualización:** 2026-06-01
 **Audiencia:** Programadores de cualquier nivel (junior → senior)
 
 ---
@@ -39,6 +39,9 @@ Una plataforma web de **quinielas deportivas recreativas** (sin dinero real, sol
 ✅ **Pronósticos automáticos**: Bot genera predicciones aleatorias si el usuario lo permite  
 ✅ **Cálculo automático de puntos**: Sistema automático basado en resultados oficiales  
 ✅ **Banderas/escudos en vivo**: Logos de equipos (clubes y selecciones) de ESPN en pronósticos, matriz y dashboard  
+✅ **Banner personalizable por evento**: Cada torneo puede tener su propio logo, línea amarilla y subtítulo (editable en `/admin/torneos`)  
+✅ **Uploader de imágenes**: Adjunta logos de hasta 800 KB (se guardan como data URL en BD, persisten en Railway)  
+✅ **Búsqueda en admin**: Filtra usuarios por nombre o correo en `/admin/usuarios`  
 ✅ **Responsive**: Mobile-first, compatible Android/iOS/Web  
 ✅ **PWA**: Puede instalarse como app en dispositivos  
 

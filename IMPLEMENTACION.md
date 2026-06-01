@@ -2,7 +2,7 @@
 
 Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qué**, el **por qué** y el **cómo probar/operar**. Para arquitectura general ver [`GUIA_COMPLETA.md`](GUIA_COMPLETA.md); para integración de marcadores ver [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md).
 
-> **Última revisión:** 2026-05-31 (sesión 4) — importar torneos ESPN + borrar quiniela + fix banderas
+> **Última revisión:** 2026-06-01 (sesión 5) — banner parametrizable + uploader de imagen + filtro usuarios
 
 ---
 
@@ -28,6 +28,10 @@ Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qu
 18. [Importar torneos desde ESPN (1 clic, multi-torneo, idempotente)](#18-importar-torneos-desde-espn-1-clic-multi-torneo-idempotente)
 19. [Borrar quiniela con doble confirmación](#19-borrar-quiniela-con-doble-confirmación)
 20. [Fix banderas: priorizar logos ESPN sobre helper FIFA](#20-fix-banderas-priorizar-logos-espn-sobre-helper-fifa)
+21. [Banner personalizable por evento: logo, línea amarilla, subtítulo](#21-banner-personalizable-por-evento-logo-línea-amarilla-subtítulo)
+22. [Uploader de imagen para logo del banner (data URL, máx 800 KB)](#22-uploader-de-imagen-para-logo-del-banner-data-url-máx-800-kb)
+23. [Búsqueda por nombre/correo en admin/usuarios](#23-búsqueda-por-nombrecorreo-en-adminusuarios)
+24. [Setup local + troubleshooting](#24-setup-local--troubleshooting)
 21. [Setup local + troubleshooting](#21-setup-local--troubleshooting)
 
 ---
@@ -798,7 +802,168 @@ Verificado end-to-end en BD local con Libertadores: imports traen `flagUrl` de E
 
 ---
 
-## 21. Setup local + troubleshooting
+## 21. Banner personalizable por evento: logo, línea amarilla, subtítulo
+
+### Qué es
+
+Cada evento (Mundial, Libertadores, Champions, etc.) puede tener su propio banner con:
+- **Logo** (URL o imagen adjunta)
+- **Línea amarilla** ("FIFA World Cup 2026 · MEX · USA · CAN")
+- **Subtítulo** ("Compite, predice y celebra...")
+
+El banner aparece en:
+- "Mis Quinielas" (toma del primer evento del usuario; fallback a Mundial)
+- Dashboard de la quiniela (toma del evento de esa quiniela)
+
+### Campos en BD
+
+3 columnas nuevas en `Event` (nullable):
+- `bannerLabel: String?` — línea amarilla (máx 120 chars)
+- `bannerSubtitle: String?` — subtítulo (máx 200 chars)
+- `bannerLogoUrl: String?` — URL http(s) o data URL de imagen (máx 1.2M chars base64)
+
+### Edición: `/admin/torneos` → "Personalizar banner del torneo"
+
+Un panel dropdown para elegir evento + 3 inputs:
+- Texto para `bannerLabel` y `bannerSubtitle`
+- Campo "URL del logo" (solo URL) + botón "Adjuntar imagen" (sección 22)
+
+Botón "Guardar banner" → `PATCH /api/admin/events/{eventId}` con los 3 campos.
+
+### Fallback
+
+Si los campos están vacíos o null:
+```ts
+const label = event.bannerLabel ?? 'FIFA World Cup 2026 · MEX · USA · CAN'
+const subtitle = event.bannerSubtitle ?? 'Compite, predice y celebra cada gol del mundial.'
+const logoUrl = event.bannerLogoUrl ?? '/wc2026/logo.png'  // WorldCupHero usa este default
+```
+
+### Probado
+
+- Crear evento con `bannerLabel` y `bannerSubtitle` → el banner las muestra en "Mis Quinielas" y Dashboard.
+- Cambiar los valores → guardar → recargar → cambios reflejan al toque.
+- Dejar vacío → cae a los defaults del Mundial.
+
+---
+
+## 22. Uploader de imagen para logo del banner (data URL, máx 800 KB)
+
+### Problema
+
+Railway tiene filesystem efímero: guardar archivos en `public/` es efímero → se pierden en redeploy. Los logos de eventos NO deben perderse.
+
+### Solución: data URL en BD
+
+La imagen se convierte a base64 (data URL) y se guarda en el mismo campo `bannerLogoUrl`:
+```
+data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA...
+```
+
+Ventajas:
+- Cero infraestructura (sin CDN, sin S3).
+- Persiste en BD siempre (incluso tras redeploy de Railway).
+- Works offline / sin depender de hosts externos.
+
+### Flujo client-side
+
+En `/admin/torneos` → botón "Adjuntar imagen":
+1. File input (`accept="image/png,image/jpeg,image/webp,image/svg+xml"`).
+2. FileReader → `readAsDataURL()` → base64.
+3. Validaciones:
+   - Tipos: PNG, JPG, WEBP, SVG.
+   - Tamaño: máximo **800 KB** (campo en BD soporta 1.2M chars base64).
+4. Conversión automática → input `bannerLogoUrl` se actualiza.
+5. Botón "Guardar banner" envía el data URL al endpoint.
+
+**UI:**
+- Vista previa de 56×56 px a la izquierda.
+- Botón "Adjuntar imagen" inline.
+- Botón "Quitar" para limpiar.
+- Texto: "Recomendado: cuadrado 160×160 px (mín. 88×88), PNG o SVG con fondo transparente. Máximo 800 KB."
+
+### Backend
+
+Endpoint `PATCH /api/admin/events/{eventId}` acepta:
+```ts
+z.string().max(1_200_000).refine(
+  (v) => /^https?:\/\//.test(v) || /^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(v),
+  { message: 'Debe ser una URL http(s) o una imagen (data URL).' },
+)
+```
+
+Permite tanto URL externa como data URL.
+
+### Render en WorldCupHero
+
+```tsx
+<Image
+  src={logo}
+  alt="..."
+  unoptimized={logo.startsWith('http') || logo.startsWith('data:')}
+  ...
+/>
+```
+
+Con `unoptimized` en data URLs → no pasa por Next.js Image Optimizer (que requeriría resize backend).
+
+### Probado
+
+- Adjuntó PNG 150×150 px, 45 KB → se convierte a data URL, se guarda, se renderiza en banner.
+- Editó después a 160×160 px, 60 KB → actualiza sin problemas.
+- La imagen persiste tras refrescar la página.
+
+---
+
+## 23. Búsqueda por nombre/correo en admin/usuarios
+
+### Qué es
+
+Input de búsqueda en `/admin/usuarios` que filtra usuarios en tiempo real por:
+- **Nombre** (substring case-insensitive)
+- **Correo** (substring case-insensitive)
+
+### Implementación
+
+Client-side filter:
+```ts
+const nameQ = nameFilter.trim().toLowerCase()
+const filtered = users?.filter((u) => {
+  if (filter === 'PENDING' && u.status !== 'INACTIVE') return false
+  if (filter === 'ACTIVE' && u.status !== 'ACTIVE') return false
+  if (quinielaFilter !== 'ALL' && !u.memberships.some(m => m.quinielaId === quinielaFilter)) return false
+  if (nameQ && !u.name.toLowerCase().includes(nameQ) && !u.email.toLowerCase().includes(nameQ)) return false
+  return true
+})
+```
+
+Funciona en conjunto con los filtros existentes (estado, quiniela).
+
+### UI
+
+Botones de estado (Todos, Pendientes, Activos) + dropdown de quiniela + **input con lupa:**
+```tsx
+<div className="relative">
+  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+  <input
+    type="text"
+    placeholder="Buscar nombre o correo…"
+    value={nameFilter}
+    onChange={(e) => setNameFilter(e.target.value)}
+    className="pl-8 pr-3 py-1.5 text-sm rounded-lg border..."
+  />
+</div>
+```
+
+### Probado
+
+- Input "juan" → filtra usuarios con "juan" en el nombre (case-insensitive).
+- Input "ejemplo@" → filtra por correo.
+- Combinado con filtro de estado (Pendientes + "juan") → funciona correctamente.
+
+---
+
+## 24. Setup local + troubleshooting
 
 ### Setup
 
