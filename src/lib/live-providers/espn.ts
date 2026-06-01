@@ -35,7 +35,19 @@ const HEADERS: Record<string, string> = {
 }
 
 // Default leagues we know are relevant. Search hits all of them in parallel.
-const DEFAULT_LEAGUES = ['fifa.world', 'fifa.friendly'] as const
+// Kept in sync with src/lib/tournaments.ts so the cheap "is anything live?"
+// sweep (fetchAllLive) covers every tournament we can import. Per-match sync
+// (fetchFixtures) does NOT depend on this list — it derives the slug from each
+// match's externalId — so adding a slug here only widens the live sweep.
+const DEFAULT_LEAGUES = [
+  'fifa.world',
+  'fifa.friendly',
+  'uefa.champions',
+  'concacaf.gold',
+  'conmebol.america',
+  'uefa.euro',
+  'conmebol.libertadores',
+] as const
 
 export type LiveFixture = {
   externalId: string // We encode "league|eventId" so a later lookup knows which slug to use.
@@ -56,8 +68,13 @@ type EspnTeam = {
   id: string
   homeAway?: 'home' | 'away'
   score?: string
-  team?: { displayName?: string; abbreviation?: string; name?: string }
+  team?: { displayName?: string; abbreviation?: string; name?: string; logo?: string }
   shootoutScore?: number
+}
+
+type EspnVenue = {
+  fullName?: string
+  address?: { city?: string; country?: string }
 }
 
 type EspnEvent = {
@@ -65,6 +82,7 @@ type EspnEvent = {
   date?: string
   name?: string
   shortName?: string
+  season?: { year?: number; type?: number; slug?: string }
   status?: {
     clock?: number
     displayClock?: string
@@ -80,8 +98,10 @@ type EspnEvent = {
   competitions?: Array<{
     id: string
     date?: string
+    venue?: EspnVenue
     competitors?: EspnTeam[]
     status?: EspnEvent['status']
+    notes?: Array<{ headline?: string }>
   }>
 }
 
@@ -233,6 +253,84 @@ export async function fetchByDate(
     }
   }
   return out
+}
+
+// ── Tournament import ────────────────────────────────────────────────────────
+
+export type ImportTeam = {
+  espnId: string
+  name: string
+  abbreviation?: string
+  logoUrl?: string
+}
+
+/**
+ * Rich fixture shape used to SEED a tournament (one-time import / re-sync),
+ * not for live updates. Carries everything needed to create Team / Stadium /
+ * Match rows: teams with logos, venue, kickoff (ISO UTC) and the ESPN season
+ * slug so we can map to our MatchPhase enum.
+ */
+export type ImportFixture = {
+  externalId: string // "leagueSlug|eventId"
+  espnEventId: string
+  leagueSlug: string
+  kickoffIsoUtc?: string
+  seasonSlug?: string // e.g. "group-stage", "round-of-16", "final"
+  home: ImportTeam | null
+  away: ImportTeam | null
+  venueName?: string
+  venueCity?: string
+  venueCountry?: string
+}
+
+function parseImportFixture(e: EspnEvent, leagueSlug: string): ImportFixture {
+  const comp = e.competitions?.[0]
+  const competitors = comp?.competitors ?? []
+  const homeC = competitors.find((c) => c.homeAway === 'home') ?? competitors[0]
+  const awayC = competitors.find((c) => c.homeAway === 'away') ?? competitors[1]
+
+  const toTeam = (c?: EspnTeam): ImportTeam | null => {
+    if (!c?.team) return null
+    return {
+      espnId: c.id,
+      name: c.team.displayName ?? c.team.name ?? c.team.abbreviation ?? 'Equipo',
+      abbreviation: c.team.abbreviation,
+      logoUrl: c.team.logo,
+    }
+  }
+
+  const venue = comp?.venue
+  return {
+    externalId: `${leagueSlug}|${e.id}`,
+    espnEventId: e.id,
+    leagueSlug,
+    kickoffIsoUtc: e.date ?? comp?.date,
+    seasonSlug: e.season?.slug,
+    home: toTeam(homeC),
+    away: toTeam(awayC),
+    venueName: venue?.fullName,
+    venueCity: venue?.address?.city,
+    venueCountry: venue?.address?.country,
+  }
+}
+
+/**
+ * Fetch ALL fixtures of a single league within a date range, with full detail
+ * for seeding (teams, logos, venue, kickoff, phase). ESPN supports a range via
+ * `dates=YYYYMMDD-YYYYMMDD` in one request.
+ *
+ *   startIso / endIso: "YYYY-MM-DD" (inclusive). Same day for both → single day.
+ */
+export async function fetchFixturesForImport(
+  leagueSlug: string,
+  startIso: string,
+  endIso: string,
+): Promise<ImportFixture[]> {
+  const from = startIso.replace(/-/g, '')
+  const to = endIso.replace(/-/g, '')
+  const range = from === to ? from : `${from}-${to}`
+  const json = await espnFetch<EspnScoreboard>(`/${leagueSlug}/scoreboard?dates=${range}`)
+  return (json.events ?? []).map((e) => parseImportFixture(e, leagueSlug))
 }
 
 /**

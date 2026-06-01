@@ -40,8 +40,8 @@ export async function GET(
       ...(matchdayId ? { matchdayId } : {}),
     },
     include: {
-      homeTeam: { select: { name: true, fifaCode: true } },
-      awayTeam: { select: { name: true, fifaCode: true } },
+      homeTeam: { select: { name: true, fifaCode: true, flagUrl: true } },
+      awayTeam: { select: { name: true, fifaCode: true, flagUrl: true } },
     },
     orderBy: { kickoffAtUtc: 'asc' },
   })
@@ -105,6 +105,8 @@ export async function GET(
     awayTeam: m.awayTeam?.name ?? m.placeholderAwayName ?? '?',
     homeFifa: m.homeTeam?.fifaCode ?? null,
     awayFifa: m.awayTeam?.fifaCode ?? null,
+    homeFlag: m.homeTeam?.flagUrl ?? null,
+    awayFlag: m.awayTeam?.flagUrl ?? null,
     officialHome: m.officialHomeGoals,
     officialAway: m.officialAwayGoals,
     status: m.status,
