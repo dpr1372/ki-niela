@@ -2,7 +2,7 @@
 
 Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qué**, el **por qué** y el **cómo probar/operar**. Para arquitectura general ver [`GUIA_COMPLETA.md`](GUIA_COMPLETA.md); para integración de marcadores ver [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md).
 
-> **Última revisión:** 2026-05-30 (sesión 2)
+> **Última revisión:** 2026-05-31 (sesión 3) — cronjob del bot + badge visual
 
 ---
 
@@ -24,7 +24,8 @@ Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qu
 14. [Bot: ventana de bloqueo + QUINIELA_ADMIN excluido de competencia](#14-bot-ventana-de-bloqueo--quiniela_admin-excluido-de-competencia)
 15. [Aislamiento de quinielas por usuario + código de invitación](#15-aislamiento-de-quinielas-por-usuario--código-de-invitación)
 16. [Admin/usuarios: membresías y filtro por quiniela](#16-adminusuarios-membresías-y-filtro-por-quiniela)
-17. [Setup local + troubleshooting](#17-setup-local--troubleshooting)
+17. [Badge morado del bot: indicador visual](#17-badge-morado-del-bot-indicador-visual)
+18. [Setup local + troubleshooting](#18-setup-local--troubleshooting)
 
 ---
 
@@ -472,8 +473,18 @@ Los administradores de quiniela **no compiten**: no acumulan puntos, no aparecen
 
 **Los Scores de QUINIELA_ADMIN se conservan en BD** — `recalculate-scores`, `sync-live-scores` y `matches/[id]/live` calculan todas las predicciones sin borrar. Solo la lectura los ignora. (Decisión tomada el 30 may 2026: no borrar, solo no contar.)
 
+### Disparador del bot: cronjob externo (cron-job.org)
+
+El bot NO tiene scheduler propio en Railway (ni `railway.toml` cron, ni GitHub Actions). Se dispara desde **cron-job.org**, un servicio externo que llama a `/api/jobs/generate-random-predictions` **cada minuto** con header `x-cron-secret`.
+
+**Otros 2 cronjobs también en cron-job.org:**
+- `lock-matches` — bloquea partidos 10 min antes del kickoff.
+- `sync-live-scores` — sincroniza marcadores en vivo desde ESPN cada minuto.
+
+Si no hay cronjobs o el bot nunca se ejecuta, revisar primero **cron-job.org** (no el código del job, que es correcto). Sin cronjob, participantes con bot activo quedan "sin predicción" porque el endpoint nunca se llama.
+
 **Archivos clave:**
-- `src/app/api/jobs/generate-random-predictions/route.ts` — lógica de ventana + filtro de rol.
+- `src/app/api/jobs/generate-random-predictions/route.ts` — lógica de ventana + filtro de rol. Requiere header `x-cron-secret` (env `CRON_SECRET`).
 - `src/app/api/quinielas/[quinielaId]/leaderboard/route.ts`
 - `src/app/quinielas/[quinielaId]/dashboard/page.tsx`
 - `src/__tests__/bot-gate.test.ts` — 27 tests que validan la ventana de bloqueo y la exclusión de admin.
@@ -583,7 +594,42 @@ Con múltiples quinielas en producción, el SUPER_ADMIN necesitaba saber **quié
 
 ---
 
-## 17. Setup local + troubleshooting
+## 17. Badge morado del bot: indicador visual
+
+### Necesidad
+
+Cuando una predicción es generada por el bot automático, el usuario necesita **identificarla de un vistazo** en las tres vistas principales (pronósticos, en vivo, matriz), para saber que no la ingresó manualmente y entender su origen.
+
+Antes: ícono/texto morado sutil, disperso y difícil de notar.
+
+### Implementación
+
+**Componente reutilizable `BotBadge`** (`src/components/quiniela/BotBadge.tsx`):
+
+- `variant="chip"` (default): pastilla morada con ícono + "Bot", para espacios con espacio.
+- `variant="icon"`: solo ícono morado 🤖, para celdas compactas (matriz).
+
+Ambas con `title` y `aria-label` para accesibilidad.
+
+**Aplicaciones:**
+
+| Vista | Dónde aparece |
+|-------|--------------|
+| **Pronósticos** | Marcador bloqueado con fondo morado claro + ícono candado morado + chip "Bot" en el footer |
+| **En vivo** | Ícono morado junto al nombre + chip "Bot" junto al marcador |
+| **Matriz** | Ícono morado en la celda del partido (compacto) |
+
+El color **morado persistente** (p.e., `text-purple-500`, `bg-purple-50`) en todas las vistas mantiene consistencia visual.
+
+**Archivos:**
+- `src/components/quiniela/BotBadge.tsx` (nuevo)
+- `src/app/quinielas/[quinielaId]/pronosticos/page.tsx` — marcador con fondo morado + badge en footer.
+- `src/app/quinielas/[quinielaId]/en-vivo/page.tsx` — ícono + chip junto al marcador.
+- `src/components/quiniela/PredictionMatrix.tsx` — ícono en celda.
+
+---
+
+## 18. Setup local + troubleshooting
 
 ### Setup
 
@@ -691,3 +737,5 @@ npm run dev   # http://localhost:3001
 | `aba5952` | style(quinielas): botón "Unirme a una quiniela" más vistoso y amigable |
 | `eea1c05` | fix(quinielas): ocultar "Unirme con código" al SUPER_ADMIN |
 | `e500a2a` | feat(admin/usuarios): ver quinielas de cada usuario + filtro por quiniela |
+| `ab137d1` | fix(pronosticos): cero a la izquierda + scroll cortado en móvil |
+| `f380505` | feat(bot): badge morado consistente para predicciones del bot |
