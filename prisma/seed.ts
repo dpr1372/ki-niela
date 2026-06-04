@@ -174,22 +174,24 @@ async function main() {
     groupCode: string
     kickoffUtc: string
   }) {
+    // update con los mismos campos del create: si el match ya existía vacío
+    // (p.ej. creado por otro script sin equipos), re-correr el seed lo repara.
+    // No tocamos status ni resultados (no figuran aquí) para no pisar lo jugado.
+    const matchData = {
+      eventId: event.id,
+      homeTeamId: opts.homeTeamId,
+      awayTeamId: opts.awayTeamId,
+      stadiumId: opts.stadiumId,
+      matchdayId: opts.matchdayId,
+      phase: MatchPhase.GROUPS,
+      groupCode: opts.groupCode,
+      kickoffAtUtc: utcDate(opts.kickoffUtc),
+      kickoffAtCostaRica: crDate(opts.kickoffUtc),
+    }
     await prisma.match.upsert({
       where: { id },
-      update: {},
-      create: {
-        id,
-        eventId: event.id,
-        homeTeamId: opts.homeTeamId,
-        awayTeamId: opts.awayTeamId,
-        stadiumId: opts.stadiumId,
-        matchdayId: opts.matchdayId,
-        phase: MatchPhase.GROUPS,
-        groupCode: opts.groupCode,
-        kickoffAtUtc: utcDate(opts.kickoffUtc),
-        kickoffAtCostaRica: crDate(opts.kickoffUtc),
-        status: MatchStatus.PROGRAMADO,
-      },
+      update: matchData,
+      create: { id, ...matchData, status: MatchStatus.PROGRAMADO },
     })
   }
 
@@ -338,7 +340,13 @@ async function main() {
   const inauguracionId = 'match-inauguration'
   await prisma.match.upsert({
     where: { id: inauguracionId },
-    update: { homeTeamId: 'team-mex', awayTeamId: 'team-rsa' },
+    update: {
+      homeTeamId: 'team-mex',
+      awayTeamId: 'team-rsa',
+      stadiumId: 'std-azteca',
+      matchdayId: 'md-jornada1',
+      groupCode: 'A',
+    },
     create: {
       id: inauguracionId,
       eventId: event.id,
