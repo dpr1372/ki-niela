@@ -17,8 +17,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const eventId = searchParams.get('eventId')
 
+  // Los partidos de eventos archivados no aparecen en /admin/partidos.
   const findArgs = {
-    where: eventId ? { eventId } : {},
+    where: eventId
+      ? { eventId }
+      : { event: { status: { not: 'ARCHIVED' } } },
     include: {
       event: { select: { id: true, name: true } },
       homeTeam: { select: { name: true, fifaCode: true } },

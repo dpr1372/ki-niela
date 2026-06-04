@@ -17,6 +17,7 @@ Plataforma web (Next.js + PostgreSQL) para quinielas deportivas **recreativas** 
 - **Borrar quiniela** (solo admin) con doble confirmación — borra solo lo de esa quiniela, no afecta Event/Match compartidos por torneo.
 - **Banderas/escudos de equipos** — prioriza logos de ESPN para clubes + selecciones; fallback a mapeo FIFA cuando es necesario.
 - **Banner parametrizable por evento** — edita logo (URL o imagen adjunta), línea amarilla y subtítulo desde `/admin/torneos`. Las imágenes se guardan como data URL en BD (persisten en Railway). Máximo 800 KB.
+- **Mantenimiento de eventos** — desde `/admin/torneos` se puede **archivar** un torneo terminado (lo oculta de todos los combos, reversible) o **borrarlo** por completo (partidos, equipos, estadios y todas sus quinielas) con doble confirmación. Un evento archivado no aparece en ningún menú.
 - **Admin: búsqueda por nombre/correo** en `/admin/usuarios` para filtrar usuarios rápidamente.
 - **Emails transaccionales** vía Brevo HTTP API (compatible con Railway, que bloquea SMTP outbound).
 - **Mobile-first**, responsive, instalable como PWA.

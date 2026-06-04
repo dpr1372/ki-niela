@@ -12,8 +12,21 @@ const createSchema = z.object({
   timezone: z.string().default('America/Costa_Rica'),
 })
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Por defecto NO devolvemos eventos archivados — no deben aparecer en ningún
+  // combo box (crear quiniela, banner, etc.). Solo la gestión de eventos pide
+  // ?includeArchived=1 (requiere SUPER_ADMIN) para poder desarchivarlos.
+  const includeArchived = new URL(req.url).searchParams.get('includeArchived') === '1'
+
+  if (includeArchived) {
+    const session = await auth()
+    if (session?.user.globalRole !== 'SUPER_ADMIN') {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
+  }
+
   const events = await prisma.event.findMany({
+    where: includeArchived ? {} : { status: { not: 'ARCHIVED' } },
     orderBy: { startDate: 'asc' },
   })
   return NextResponse.json(events)

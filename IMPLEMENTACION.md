@@ -2,7 +2,7 @@
 
 Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qué**, el **por qué** y el **cómo probar/operar**. Para arquitectura general ver [`GUIA_COMPLETA.md`](GUIA_COMPLETA.md); para integración de marcadores ver [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md).
 
-> **Última revisión:** 2026-06-01 (sesión 5) — banner parametrizable + uploader de imagen + filtro usuarios
+> **Última revisión:** 2026-06-01 (sesión 6) — archivar/borrar eventos + filtrar archivados de todos los combos
 
 ---
 
@@ -31,7 +31,8 @@ Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qu
 21. [Banner personalizable por evento: logo, línea amarilla, subtítulo](#21-banner-personalizable-por-evento-logo-línea-amarilla-subtítulo)
 22. [Uploader de imagen para logo del banner (data URL, máx 800 KB)](#22-uploader-de-imagen-para-logo-del-banner-data-url-máx-800-kb)
 23. [Búsqueda por nombre/correo en admin/usuarios](#23-búsqueda-por-nombrecorreo-en-adminusuarios)
-24. [Setup local + troubleshooting](#24-setup-local--troubleshooting)
+24. [Mantenimiento de eventos: archivar y borrar torneos completos](#24-mantenimiento-de-eventos-archivar-y-borrar-torneos-completos)
+25. [Setup local + troubleshooting](#25-setup-local--troubleshooting)
 21. [Setup local + troubleshooting](#21-setup-local--troubleshooting)
 
 ---
@@ -963,7 +964,64 @@ Botones de estado (Todos, Pendientes, Activos) + dropdown de quiniela + **input 
 
 ---
 
-## 24. Setup local + troubleshooting
+## 24. Mantenimiento de eventos: archivar y borrar torneos completos
+
+### Problema
+
+Cada año hay un calendario distinto y los eventos pasados (Libertadores 2025, mundiales viejos, amistosos antiguos) se acumulan en la BD. `/admin/partidos` listaba **todos** los partidos de todos los eventos (218+ y creciendo), y los eventos terminados seguían apareciendo en todos los combos box aunque ya no tuvieran quinielas activas.
+
+### Dos niveles distintos (no confundir)
+
+| Acción | Dónde | Alcance |
+|--------|-------|---------|
+| **Archivar quiniela** (toggle Visibilidad) | `/admin/usuarios` | Solo ESA quiniela se oculta. Las demás quinielas del mismo evento siguen visibles. |
+| **Archivar evento** | `/admin/torneos` → "Gestionar eventos" | TODAS las N quinielas del evento desaparecen de los combos. Reversible. |
+| **Borrar evento** | `/admin/torneos` → "Gestionar eventos" | Elimina el evento + partidos + equipos + estadios + jornadas + TODAS sus quinielas (con predicciones y scores). Definitivo. |
+
+Un evento puede tener **N quinielas**. Archivar/borrar el evento opera sobre el torneo completo; el toggle de visibilidad opera sobre una quiniela individual.
+
+### Archivar evento (reversible)
+
+`PATCH /api/admin/events/{eventId}` con `{ status: 'ARCHIVED' | 'ACTIVE' }`. El schema de Event ya tiene `status` (no requiere migración).
+
+**Un evento `ARCHIVED` NO aparece en ningún combo box.** Se filtró en todas las fuentes:
+- `GET /api/events` → `where: { status: { not: 'ARCHIVED' } }` por defecto. Solo la tarjeta de gestión pide `?includeArchived=1` (requiere SUPER_ADMIN).
+- `GET /api/admin/matches` → excluye partidos de eventos archivados (`event: { status: { not: 'ARCHIVED' } }`).
+- `quinielas/page.tsx` → ya filtraba `status != ARCHIVED` para el listado de eventos.
+
+### Borrar evento (definitivo, doble confirmación)
+
+`DELETE /api/admin/events/{eventId}` con body `{ confirmName }` que debe coincidir **exactamente** con el nombre del evento.
+
+Como el schema **no** tiene `onDelete: Cascade`, el borrado es una transacción en orden hijos→padre:
+
+```
+Score → Prediction → QuinielaStarMatch → QuinielaMember → Quiniela
+     → Match → Matchday → Team → Stadium → Event
+```
+
+Devuelve los conteos de cada tabla borrada y crea un `AuditLog` `EVENT_DELETED` con el detalle.
+
+### UI: tarjeta "Gestionar eventos" en `/admin/torneos`
+
+Lista todos los eventos (incluidos archivados vía `?includeArchived=1`), cada uno con:
+- Badge "Archivado" si aplica.
+- Botón **Archivar / Reactivar** (toggle de status).
+- Botón **Borrar** → abre zona roja que pide escribir el nombre exacto del evento antes de habilitar "Borrar definitivamente".
+
+Tras importar un torneo, la lista se refresca automáticamente (`loadEvents()`).
+
+### Probado
+
+- Archivar un evento → desaparece de "Mis Quinielas", del combo de `/admin/partidos`, del selector de crear quiniela y del banner. Reactivar lo devuelve.
+- Borrar un evento de prueba → se eliminan partidos, equipos, estadios, jornadas y quinielas; el evento ya no aparece en ningún lado; otras quinielas/eventos intactos.
+- El toggle de visibilidad de quiniela individual (`/admin/usuarios`) sigue funcionando independiente.
+
+> **Nota de troubleshooting:** durante el desarrollo, el toggle de archivar quiniela devolvía un 404 falso. La causa era **cache corrupto de Turbopack** tras múltiples ediciones + reinicios del dev server (no un bug de código). Solución: `rm -rf .next` y reiniciar `npm run dev`.
+
+---
+
+## 25. Setup local + troubleshooting
 
 ### Setup
 

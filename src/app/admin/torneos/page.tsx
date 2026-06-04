@@ -10,12 +10,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BallLoader } from '@/components/ui/BallLoader'
-import { Trophy, Download, RefreshCw, ExternalLink, Paintbrush, Upload } from 'lucide-react'
+import { Trophy, Download, RefreshCw, ExternalLink, Paintbrush, Upload, Archive, ArchiveRestore, Trash2, Settings } from 'lucide-react'
 import { TOURNAMENTS } from '@/lib/tournaments'
 
 type EventSummary = {
   id: string
   name: string
+  status: string
   bannerLabel: string | null
   bannerSubtitle: string | null
   bannerLogoUrl: string | null
@@ -63,30 +64,96 @@ export default function AdminTorneosPage() {
   const [bannerLogoUrl, setBannerLogoUrl] = useState('')
   const [savingBanner, setSavingBanner] = useState(false)
 
-  useEffect(() => {
+  // Gestión de eventos (incluye archivados, solo para esta tarjeta)
+  const [manageEvents, setManageEvents] = useState<EventSummary[]>([])
+  const [busyEventId, setBusyEventId] = useState<string>('')
+  const [deleteConfirm, setDeleteConfirm] = useState<string>('') // eventId en modo confirmar
+  const [deleteName, setDeleteName] = useState('')
+
+  function loadEvents() {
+    // El banner usa solo eventos activos; la gestión incluye archivados.
     fetch('/api/events')
       .then((r) => r.json())
       .then((data: EventSummary[]) => {
         setEvents(data)
         if (data.length > 0) {
           const first = data[0]
-          setSelectedEventId(first.id)
-          setBannerLabel(first.bannerLabel ?? '')
-          setBannerSubtitle(first.bannerSubtitle ?? '')
-          setBannerLogoUrl(first.bannerLogoUrl ?? '')
+          setSelectedEventId((prev) => prev || first.id)
         }
       })
       .catch(() => toast.error('No se pudo cargar la lista de eventos.'))
+
+    fetch('/api/events?includeArchived=1')
+      .then((r) => r.json())
+      .then((data: EventSummary[]) => setManageEvents(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    loadEvents()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function onSelectEvent(id: string) {
-    setSelectedEventId(id)
-    const ev = events.find((e) => e.id === id)
+  // Sincroniza los campos del banner cuando cambia la lista o el evento elegido.
+  useEffect(() => {
+    const ev = events.find((e) => e.id === selectedEventId)
     if (ev) {
       setBannerLabel(ev.bannerLabel ?? '')
       setBannerSubtitle(ev.bannerSubtitle ?? '')
       setBannerLogoUrl(ev.bannerLogoUrl ?? '')
     }
+  }, [selectedEventId, events])
+
+  async function toggleArchive(ev: EventSummary) {
+    const next = ev.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED'
+    setBusyEventId(ev.id)
+    try {
+      const res = await fetch(`/api/admin/events/${ev.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(next === 'ARCHIVED' ? 'Evento archivado.' : 'Evento reactivado.')
+      loadEvents()
+    } catch {
+      toast.error('No se pudo cambiar el estado del evento.')
+    } finally {
+      setBusyEventId('')
+    }
+  }
+
+  async function deleteEvent(ev: EventSummary) {
+    if (deleteName !== ev.name) {
+      toast.error('El nombre no coincide.')
+      return
+    }
+    setBusyEventId(ev.id)
+    try {
+      const res = await fetch(`/api/admin/events/${ev.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmName: deleteName }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? 'error')
+      const d = data.deleted
+      toast.success(
+        `Evento borrado: ${d.matches} partidos, ${d.teams} equipos, ${d.quinielas} quinielas.`,
+      )
+      setDeleteConfirm('')
+      setDeleteName('')
+      loadEvents()
+    } catch (e) {
+      toast.error(`No se pudo borrar el evento. ${e instanceof Error ? e.message : ''}`)
+    } finally {
+      setBusyEventId('')
+    }
+  }
+
+  // El useEffect de arriba sincroniza los campos del banner al cambiar de evento.
+  function onSelectEvent(id: string) {
+    setSelectedEventId(id)
   }
 
   // Convierte la imagen seleccionada a un data URL (base64) que se guarda en
@@ -178,6 +245,7 @@ export default function AdminTorneosPage() {
         return
       }
       setLastResult(data as ImportResult)
+      loadEvents() // refrescar combos y la tarjeta de gestión con el evento nuevo
       const c = (data as ImportResult).counts
       if (isResync) {
         toast.success(
@@ -387,6 +455,98 @@ export default function AdminTorneosPage() {
             <Button onClick={saveBanner} disabled={savingBanner || !selectedEventId}>
               <Paintbrush size={14} /> {savingBanner ? 'Guardando…' : 'Guardar banner'}
             </Button>
+          </div>
+        )}
+
+        {manageEvents.length > 0 && (
+          <div className="card-pitch rounded-2xl p-5 sm:p-6 space-y-4">
+            <div>
+              <h2 className="font-bold text-pitch-dark flex items-center gap-2">
+                <Settings size={18} /> Gestionar eventos
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Archivá un evento terminado para ocultarlo de todos los menús (reversible), o borralo
+                definitivamente con todos sus partidos, equipos y quinielas.
+              </p>
+            </div>
+
+            <ul className="divide-y divide-gray-100">
+              {manageEvents.map((ev) => {
+                const archived = ev.status === 'ARCHIVED'
+                const confirming = deleteConfirm === ev.id
+                const busy = busyEventId === ev.id
+                return (
+                  <li key={ev.id} className="py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="min-w-0">
+                        <span className="font-semibold text-gray-800">{ev.name}</span>
+                        {archived && (
+                          <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-gray-400 text-white font-bold uppercase tracking-wide">
+                            Archivado
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleArchive(ev)}
+                          disabled={busy}
+                        >
+                          {archived ? (
+                            <><ArchiveRestore size={14} /> Reactivar</>
+                          ) : (
+                            <><Archive size={14} /> Archivar</>
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => {
+                            setDeleteConfirm(confirming ? '' : ev.id)
+                            setDeleteName('')
+                          }}
+                          disabled={busy}
+                        >
+                          <Trash2 size={14} /> Borrar
+                        </Button>
+                      </div>
+                    </div>
+
+                    {confirming && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
+                        <p className="text-xs text-red-800 leading-relaxed">
+                          Esto borra <b>definitivamente</b> el evento, sus partidos, equipos, estadios,
+                          jornadas y <b>todas las quinielas</b> del evento (con predicciones y puntajes).
+                          No se puede deshacer. Escribí <b>{ev.name}</b> para confirmar:
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Input
+                            value={deleteName}
+                            onChange={(e) => setDeleteName(e.target.value)}
+                            placeholder={ev.name}
+                            disabled={busy}
+                            className="max-w-xs"
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-red-600 hover:bg-red-700"
+                            onClick={() => deleteEvent(ev)}
+                            disabled={busy || deleteName !== ev.name}
+                          >
+                            {busy ? 'Borrando…' : 'Borrar definitivamente'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
           </div>
         )}
 
