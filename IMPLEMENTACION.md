@@ -2,7 +2,7 @@
 
 Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qué**, el **por qué** y el **cómo probar/operar**. Para arquitectura general ver [`GUIA_COMPLETA.md`](GUIA_COMPLETA.md); para integración de marcadores ver [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md).
 
-> **Última revisión:** 2026-06-01 (sesión 6) — archivar/borrar eventos + filtrar archivados de todos los combos
+> **Última revisión:** 2026-06-01 (sesión 7) — filtros de participantes + fix seed grupos Mundial
 
 ---
 
@@ -32,7 +32,9 @@ Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qu
 22. [Uploader de imagen para logo del banner (data URL, máx 800 KB)](#22-uploader-de-imagen-para-logo-del-banner-data-url-máx-800-kb)
 23. [Búsqueda por nombre/correo en admin/usuarios](#23-búsqueda-por-nombrecorreo-en-adminusuarios)
 24. [Mantenimiento de eventos: archivar y borrar torneos completos](#24-mantenimiento-de-eventos-archivar-y-borrar-torneos-completos)
-25. [Setup local + troubleshooting](#25-setup-local--troubleshooting)
+25. [Filtros: buscar participantes + usuarios sin quiniela](#25-filtros-buscar-participantes--usuarios-sin-quiniela)
+26. [Fix seed: partidos de grupos del Mundial sin equipos en prod](#26-fix-seed-partidos-de-grupos-del-mundial-sin-equipos-en-prod)
+27. [Setup local + troubleshooting](#27-setup-local--troubleshooting)
 21. [Setup local + troubleshooting](#21-setup-local--troubleshooting)
 
 ---
@@ -1021,7 +1023,93 @@ Tras importar un torneo, la lista se refresca automáticamente (`loadEvents()`).
 
 ---
 
-## 25. Setup local + troubleshooting
+## 25. Filtros: buscar participantes + usuarios sin quiniela
+
+### Búsqueda de participantes por nombre/correo
+
+**Vista:** `quinielas/[quinielaId]/participantes` (solo QUINIELA_ADMIN).
+
+Input de búsqueda en vivo sobre la lista de miembros. Filtra por substring case-insensitive en `user.name` o `user.email`. Muestra contador "N de M participantes" cuando hay búsqueda activa. Si no coincide nadie, muestra "No hay participantes que coincidan con la búsqueda."
+
+```tsx
+const q = search.trim().toLowerCase()
+const filteredMembers = q
+  ? members.filter(
+      (m) => m.user.name.toLowerCase().includes(q) || m.user.email.toLowerCase().includes(q),
+    )
+  : members
+```
+
+### Filtro "Sin quiniela (ninguna)" en admin/usuarios
+
+**Vista:** `/admin/usuarios` — dropdown de Quiniela.
+
+Agrega la opción `value="NONE"` que filtra usuarios cuya lista de `memberships` está **vacía** (no son miembros de ninguna quiniela). Útil para identificar usuarios registrados que aún no se unieron a ningún torneo.
+
+```ts
+if (quinielaFilter === 'NONE') {
+  if (u.memberships.length > 0) return false
+}
+```
+
+Los tres filtros se componen entre sí: estado global (Todos/Pendientes/Activos) + quiniela (ALL/NONE/<id>) + búsqueda nombre/correo.
+
+---
+
+## 26. Fix seed: partidos de grupos del Mundial sin equipos en prod
+
+### Síntoma
+
+`/admin/partidos` mostraba todos los partidos del Mundial como "— vs —". El botón "Auto-vincular" no encontraba nada (filtra `homeName !== '—'`). Los 72 partidos de fase de grupos de `event-wc2026` tenían `homeTeamId = null` y `awayTeamId = null` en producción. Las 2 quinielas del Mundial tenían **0 predicciones** (no llegaron a jugarse).
+
+### Causa raíz
+
+`prisma/seed.ts` usaba `update: {}` (vacío) en el `upsertMatch` de grupos:
+
+```ts
+await prisma.match.upsert({
+  where: { id },
+  update: {},   // ← nunca asignaba equipos si el match ya existía
+  create: { id, homeTeamId: ..., awayTeamId: ..., ... },
+})
+```
+
+Los matches de grupos se habían creado vacíos en prod (por algún script previo) antes de que el seed pudiera asignarles equipos. Al re-correr el seed, el `upsert` los encontraba con su ID y por el `update: {}` los dejaba igual — sin equipos.
+
+### Fix
+
+Cambiar `update: {}` para que asigne los mismos campos que el `create` (equipos, estadio, jornada, grupo, kickoffs), omitiendo solo `status` y resultados para no pisar partidos ya jugados:
+
+```ts
+const matchData = {
+  eventId: event.id,
+  homeTeamId: opts.homeTeamId,
+  awayTeamId: opts.awayTeamId,
+  stadiumId: opts.stadiumId,
+  matchdayId: opts.matchdayId,
+  phase: MatchPhase.GROUPS,
+  groupCode: opts.groupCode,
+  kickoffAtUtc: utcDate(opts.kickoffUtc),
+  kickoffAtCostaRica: crDate(opts.kickoffUtc),
+}
+await prisma.match.upsert({
+  where: { id },
+  update: matchData,
+  create: { id, ...matchData, status: MatchStatus.PROGRAMADO },
+})
+```
+
+### Reparación en producción
+
+Se corrió el seed corregido contra Railway. Resultado: **72/72 grupos reparados** (México vs Sudáfrica, Brasil vs Marruecos, etc.). Las eliminatorias (32 partidos con placeholders), quinielas, miembros y predicciones no se tocaron. Cero pérdida de datos de usuarios.
+
+### Diagnóstico previo
+
+Duplicado `evt-fifa-world-2026` ("Copa del Mundo FIFA") detectado en prod: 0 quinielas, 0 predicciones, 28 partidos sueltos. Se identifica como evento creado al importar desde ESPN cuando ya existía `event-wc2026` del seed. Pendiente borrar desde `/admin/torneos` → Gestionar eventos.
+
+---
+
+## 27. Setup local + troubleshooting
 
 ### Setup
 

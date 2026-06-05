@@ -1,6 +1,6 @@
 # 🏆 Ki-Niela: Guía Completa para Desarrolladores
 
-**Versión:** 1.4
+**Versión:** 1.5
 **Última actualización:** 2026-06-01
 **Audiencia:** Programadores de cualquier nivel (junior → senior)
 
@@ -43,6 +43,7 @@ Una plataforma web de **quinielas deportivas recreativas** (sin dinero real, sol
 ✅ **Uploader de imágenes**: Adjunta logos de hasta 800 KB (se guardan como data URL en BD, persisten en Railway)  
 ✅ **Búsqueda en admin**: Filtra usuarios por nombre o correo en `/admin/usuarios`  
 ✅ **Mantenimiento de eventos**: Archivar (reversible) o borrar (definitivo, con cascada y doble confirmación) torneos completos desde `/admin/torneos`. Los archivados no aparecen en ningún combo  
+✅ **Filtros avanzados**: Búsqueda por nombre/correo en la lista de participantes de cada quiniela. Opción "Sin quiniela" en admin para ver usuarios sin membresías  
 ✅ **Responsive**: Mobile-first, compatible Android/iOS/Web  
 ✅ **PWA**: Puede instalarse como app en dispositivos  
 
