@@ -187,8 +187,13 @@ export default function AdminUsuariosPage() {
     // Filtro de estado global de la cuenta.
     if (filter === 'PENDING' && u.status !== 'INACTIVE') return false
     if (filter === 'ACTIVE' && u.status !== 'ACTIVE') return false
-    // Filtro por quiniela: solo usuarios que son miembros de la quiniela elegida.
-    if (quinielaFilter !== 'ALL' && !u.memberships.some((m) => m.quinielaId === quinielaFilter)) {
+    // Filtro por quiniela:
+    // - 'ALL'  → todos
+    // - 'NONE' → solo usuarios sin ninguna membresía (no están en quiniela alguna)
+    // - <id>   → solo miembros de esa quiniela
+    if (quinielaFilter === 'NONE') {
+      if (u.memberships.length > 0) return false
+    } else if (quinielaFilter !== 'ALL' && !u.memberships.some((m) => m.quinielaId === quinielaFilter)) {
       return false
     }
     // Filtro por nombre o correo.
@@ -258,6 +263,7 @@ export default function AdminUsuariosPage() {
                 className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 outline-none focus:border-emerald-500"
               >
                 <option value="ALL">Todas las quinielas</option>
+                <option value="NONE">Sin quiniela (ninguna)</option>
                 {quinielas.map((q) => (
                   <option key={q.id} value={q.id}>
                     {q.name} {q.status !== 'ACTIVE' ? '(archivada)' : ''}

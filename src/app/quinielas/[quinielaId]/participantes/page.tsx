@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { BallLoader } from '@/components/ui/BallLoader'
+import { Search } from 'lucide-react'
 
 type Member = {
   id: string
@@ -51,6 +52,7 @@ export default function ParticipantesPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
 
   async function loadMembers() {
     const res = await fetch(`/api/quinielas/${quinielaId}/members?includeAllUsers=true`)
@@ -101,6 +103,14 @@ export default function ParticipantesPage() {
 
   const isAdmin = currentUserRole === 'QUINIELA_ADMIN'
 
+  const q = search.trim().toLowerCase()
+  const filteredMembers = q
+    ? members.filter(
+        (m) =>
+          m.user.name.toLowerCase().includes(q) || m.user.email.toLowerCase().includes(q),
+      )
+    : members
+
   if (loading) return <AppShell quinielaId={quinielaId}><BallLoader label="Cargando…" /></AppShell>
 
   if (!isAdmin) {
@@ -120,8 +130,28 @@ export default function ParticipantesPage() {
           no el estado global de la cuenta. Un usuario puede estar activo globalmente pero pendiente o no miembro en una quiniela específica.
         </p>
 
+        <div className="relative max-w-sm">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Buscar nombre o correo…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          />
+        </div>
+
+        {q && (
+          <p className="text-xs text-gray-500">
+            {filteredMembers.length} de {members.length} participantes
+          </p>
+        )}
+
         <div className="space-y-3">
-          {members.map((m) => (
+          {filteredMembers.length === 0 && (
+            <p className="text-sm text-gray-500">No hay participantes que coincidan con la búsqueda.</p>
+          )}
+          {filteredMembers.map((m) => (
             <Card key={m.id}>
               <CardContent className="pt-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
