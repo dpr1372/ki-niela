@@ -1248,6 +1248,61 @@ npm run dev   # http://localhost:3001
 
 ---
 
+## 29. Recuperación de contraseña por correo
+
+### Problema
+La página `/forgot-password` era un placeholder de MVP: su `handleSubmit` solo mostraba un toast
+("Si el correo existe, recibirás instrucciones.") y **nunca llamaba a un endpoint ni enviaba correo**.
+No existía endpoint de forgot/reset, ni página para fijar la nueva contraseña, ni almacenamiento del
+token. Resultado: al usuario nunca le llegaba nada al correo registrado.
+
+### Diseño
+Flujo estándar de reset con **token de un solo uso, hasheado en BD, con expiración de 1 hora**:
+
+1. **Solicitar** (`POST /api/auth/forgot-password`): valida el email con Zod, busca el usuario y —si
+   existe— genera un token aleatorio (`randomBytes(32)`), guarda su **hash SHA-256** (nunca el token en
+   claro) en la tabla `PasswordResetToken` con `expiresAt = now + 1h`, invalida tokens previos sin usar,
+   y envía el correo con el enlace `…/reset-password?token=<raw>`. **Siempre responde el mismo mensaje
+   genérico** (200), exista o no el correo, para no permitir enumerar cuentas. El envío usa
+   `Promise.allSettled` para no romper la respuesta si el correo falla.
+2. **Fijar** (`POST /api/auth/reset-password`): recibe `{ token, password }`, hashea el token recibido,
+   busca por `tokenHash`, valida que exista, no esté usado y no haya expirado (si no → 400 "Enlace
+   inválido o expirado"). En una `$transaction` actualiza `User.passwordHash` (bcrypt cost 12, igual que
+   el registro) y marca el token como `usedAt = now` (one-shot).
+
+### Modelo de datos — `PasswordResetToken`
+Tabla nueva (`prisma/migrations/20260611000000_password_reset_token/`):
+`id`, `userId` (FK → User, `onDelete: Cascade`), `tokenHash` (`@unique`, sha256 del token en claro),
+`expiresAt`, `usedAt?`, `createdAt`. En BD solo vive el **hash**; el token en claro solo viaja por el
+correo/URL. La migración se aplica sola en Railway (`build:railway` → `prisma migrate deploy`).
+
+> **Bug latente arreglado de paso:** la migración inicial commiteada
+> (`20260525062510_initial_schema/migration.sql`) tenía una línea basura `Loaded Prisma config from
+> prisma.config.ts.` en la primera línea (no es SQL), que rompía el shadow DB de `prisma migrate dev` y
+> cualquier BD creada desde cero. Se eliminó. Prod no se vio afectada (ya tenía la migración registrada
+> por nombre; `migrate deploy` solo emite un warning de checksum y no la re-aplica).
+
+### UI
+- `src/app/forgot-password/page.tsx`: ahora hace `fetch('POST /api/auth/forgot-password')` y muestra el
+  mensaje genérico + estado de carga.
+- `src/app/reset-password/page.tsx` (nueva): lee `token` de `useSearchParams` (envuelto en `<Suspense>`,
+  requisito de Next 16 App Router), dos inputs (contraseña + confirmar, ≥8 y coincidentes), llama al
+  endpoint y en éxito redirige a `/login`. Sin token o token inválido → mensaje con link a
+  `/forgot-password`.
+
+### Correo
+Nuevo template `sendPasswordReset` en `src/lib/mailer-templates.ts`, reutilizando el helper `wrap(...)` y
+`sendMail` (Brevo HTTP API). Botón CTA al enlace, aviso de vencimiento (1 h, un solo uso) y "si no fuiste
+vos, ignorá este correo".
+
+### Probado (local)
+- `forgot-password` con correo inexistente → 200 genérico, sin enviar nada.
+- `forgot-password` con usuario real → crea token y dispara el envío.
+- `reset-password` con token válido → 200, password actualizado (verificado con bcrypt: nuevo coincide,
+  viejo no); reusar el mismo token → 400 (one-shot, `usedAt` seteado); password <8 → 422.
+
+---
+
 ## Commits relevantes (cronológicos)
 
 | Commit | Tema |

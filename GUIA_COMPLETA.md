@@ -1,6 +1,6 @@
 # 🏆 Ki-Niela: Guía Completa para Desarrolladores
 
-**Versión:** 1.7
+**Versión:** 1.8
 **Última actualización:** 2026-06-01
 **Audiencia:** Programadores de cualquier nivel (junior → senior)
 
@@ -515,6 +515,38 @@ CREATE TABLE AuditLog (
 12. Redirige a /login
 ```
 
+### Recuperación de contraseña (olvidé mi contraseña)
+
+Flujo con **token de un solo uso, hasheado en BD, válido 1 hora**:
+
+```
+1. Usuario entra a /forgot-password e ingresa su correo
+2. POST /api/auth/forgot-password { email }
+   ├─ Valida email con Zod
+   ├─ Busca el User; si NO existe → responde igual (genérico), no envía nada
+   ├─ Si existe:
+   │   ├─ randomBytes(32) → token en claro
+   │   ├─ Guarda SHA-256(token) en PasswordResetToken (expiresAt = now+1h)
+   │   ├─ Borra tokens previos sin usar del mismo user
+   │   └─ Envía correo con enlace …/reset-password?token=<raw> (sendPasswordReset)
+   └─ Responde SIEMPRE: "Si el correo existe, recibirás instrucciones." (no enumera cuentas)
+
+3. Usuario abre el enlace del correo → /reset-password?token=…
+4. Ingresa nueva contraseña (≥8, confirmada)
+5. POST /api/auth/reset-password { token, password }
+   ├─ SHA-256(token) → busca por tokenHash
+   ├─ Valida: existe, usedAt == null, expiresAt > now (si no → 400 "Enlace inválido o expirado")
+   ├─ $transaction: User.passwordHash = bcrypt(password, 12)  +  token.usedAt = now (one-shot)
+   └─ Responde: "Contraseña actualizada. Ya puedes iniciar sesión."
+
+6. Usuario hace login con la nueva contraseña
+```
+
+**Tabla `PasswordResetToken`**: `id`, `userId` (FK → User, cascade), `tokenHash` (`@unique`),
+`expiresAt`, `usedAt?`, `createdAt`. En BD solo se guarda el **hash** del token; el valor en claro solo
+viaja por el correo. El correo se envía con el template `sendPasswordReset` (helper `sendMail` / Brevo).
+La migración se aplica sola en Railway (`prisma migrate deploy` en el build).
+
 ### NextAuth Configuration
 
 **`src/auth.ts`**
@@ -811,7 +843,9 @@ Componentes base importados de `shadcn`:
 ├── auth/
 │   ├── register           POST   Crear usuario
 │   ├── login              POST   Login (NextAuth)
-│   └── logout             POST   Logout (NextAuth)
+│   ├── logout             POST   Logout (NextAuth)
+│   ├── forgot-password    POST   Solicitar reseteo (envía enlace al correo)
+│   └── reset-password     POST   Fijar nueva contraseña con el token
 ├── me                     GET    Perfil del usuario logueado
 │                          PATCH  Actualizar perfil (name/email/password)
 ├── admin/

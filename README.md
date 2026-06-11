@@ -22,6 +22,7 @@ Plataforma web (Next.js + PostgreSQL) para quinielas deportivas **recreativas** 
 - **Mantenimiento de eventos** — desde `/admin/torneos` se puede **archivar** un torneo terminado (lo oculta de todos los combos, reversible) o **borrarlo** por completo (partidos, equipos, estadios y todas sus quinielas) con doble confirmación. Un evento archivado no aparece en ningún menú.
 - **Admin: búsqueda por nombre/correo** en `/admin/usuarios` para filtrar usuarios rápidamente. Incluye opción "Sin quiniela" para ver usuarios que no son miembros de ninguna quiniela.
 - **Búsqueda de participantes** en cada quiniela (por nombre o correo), con contador de resultados.
+- **Recuperación de contraseña por correo** — desde `/forgot-password` se envía un enlace de reseteo al correo registrado (token de un solo uso, válido 1 h, guardado hasheado en BD). La página `/reset-password?token=…` permite fijar la nueva contraseña. Respuesta genérica que no revela si el correo existe.
 - **Emails transaccionales** vía Brevo HTTP API (compatible con Railway, que bloquea SMTP outbound).
 - **Mobile-first**, responsive, instalable como PWA.
 

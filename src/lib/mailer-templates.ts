@@ -97,6 +97,38 @@ export async function sendUserActivatedGlobally(opts: { userName: string; userEm
   })
 }
 
+export async function sendPasswordReset(opts: {
+  userName: string
+  userEmail: string
+  resetUrl: string
+}) {
+  const body = `
+    <p>¡Hola <strong>${opts.userName}</strong>!</p>
+    <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en <strong>Ki-Niela</strong>.</p>
+    <p>Hacé clic en el botón para elegir una contraseña nueva:</p>
+    <p style="text-align:center;margin:24px 0;">
+      <a href="${opts.resetUrl}" style="background:#082f49;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;">
+        Restablecer contraseña
+      </a>
+    </p>
+    <p style="background:#fef3c7;border-radius:8px;padding:12px;border-left:4px solid #f59e0b;color:#78350f;font-size:13px;">
+      ⏰ Este enlace vence en <strong>1 hora</strong> y solo puede usarse una vez.
+    </p>
+    <p style="color:#6b7280;font-size:13px;margin-top:16px;">
+      Si vos no pediste este cambio, ignorá este correo: tu contraseña actual seguirá funcionando.
+    </p>
+    <p style="color:#9ca3af;font-size:11px;margin-top:16px;word-break:break-all;">
+      Si el botón no funciona, copiá y pegá este enlace en tu navegador:<br>${opts.resetUrl}
+    </p>
+  `
+  return sendMail({
+    to: opts.userEmail,
+    subject: 'Restablecé tu contraseña de Ki-Niela',
+    html: wrap('Recuperar acceso', body),
+    text: `Hola ${opts.userName}, para restablecer tu contraseña de Ki-Niela abrí este enlace (vence en 1 hora): ${opts.resetUrl}`,
+  })
+}
+
 export async function sendQuinielaAccessRequestToAdmin(opts: {
   adminEmail: string
   userName: string

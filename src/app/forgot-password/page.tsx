@@ -11,12 +11,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    // In this MVP, show a generic message without actually sending email
-    setSent(true)
-    toast.success('Si el correo existe, recibirás instrucciones.')
+    if (loading) return
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json().catch(() => ({}))
+      // El backend siempre responde genérico (no revela si el correo existe).
+      setSent(true)
+      toast.success(data.message ?? 'Si el correo existe, recibirás instrucciones.')
+    } catch {
+      toast.error('No se pudo enviar la solicitud. Intentá de nuevo.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -48,8 +63,8 @@ export default function ForgotPasswordPage() {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full">
-                  Enviar instrucciones
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? 'Enviando…' : 'Enviar instrucciones'}
                 </Button>
               </form>
             )}
