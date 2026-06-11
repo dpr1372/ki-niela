@@ -1,6 +1,6 @@
 # 🏆 Ki-Niela: Guía Completa para Desarrolladores
 
-**Versión:** 1.6
+**Versión:** 1.7
 **Última actualización:** 2026-06-01
 **Audiencia:** Programadores de cualquier nivel (junior → senior)
 
@@ -44,6 +44,7 @@ Una plataforma web de **quinielas deportivas recreativas** (sin dinero real, sol
 ✅ **Búsqueda en admin**: Filtra usuarios por nombre o correo en `/admin/usuarios`  
 ✅ **Mantenimiento de eventos**: Archivar (reversible) o borrar (definitivo, con cascada y doble confirmación) torneos completos desde `/admin/torneos`. Los archivados no aparecen en ningún combo  
 ✅ **Filtros avanzados**: Búsqueda por nombre/correo en la lista de participantes de cada quiniela. Opción "Sin quiniela" en admin para ver usuarios sin membresías  
+✅ **Super Admin flexible**: Administra cualquier quiniela sin ser miembro; puede optar por competir en el puntaje con un toggle por quiniela (solo visible para él)  
 ✅ **Responsive**: Mobile-first, compatible Android/iOS/Web  
 ✅ **PWA**: Puede instalarse como app en dispositivos  
 
@@ -570,7 +571,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 - No se puede desactivar/degradar al **último `QUINIELA_ADMIN` activo** de una quiniela (409). El SUPER_ADMIN puede administrarla igual, pero la quiniela no debe quedar sin admin local.
 - No se puede quitar `SUPER_ADMIN` ni desactivar al **último `SUPER_ADMIN` activo** del sistema (400).
 
-**`isAdminOf(ctx)`** (en `quiniela-auth.ts`) devuelve `true` si `ctx.globalRole === 'SUPER_ADMIN'` **o** si es `QUINIELA_ADMIN` activo. **`PLAYER_MEMBER_FILTER`** (leaderboards/competencia) NO cambia: el SUPER_ADMIN sigue excluido de competir.
+**`isAdminOf(ctx)`** (en `quiniela-auth.ts`) devuelve `true` si `ctx.globalRole === 'SUPER_ADMIN'` **o** si es `QUINIELA_ADMIN` activo.
+
+**Toggle "Participar en el puntaje" (solo SUPER_ADMIN):** por defecto el SUPER_ADMIN administra pero no compite. Desde el dashboard de cada quiniela puede activar un toggle (visible solo para él) que cambia su membresía a `PARTICIPANT` → entra al ranking y se le calculan puntos. Desactivarlo lo deja como `QUINIELA_ADMIN` (solo administra). Endpoint: `POST /api/quinielas/[id]/me/participation`. El criterio de "jugador" en leaderboard/recalc/bot es únicamente `role: PARTICIPANT` — un QUINIELA_ADMIN (o SUPER_ADMIN que no participa) nunca compite.
 
 **Middleware de autorización:**
 
