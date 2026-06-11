@@ -1,6 +1,6 @@
 # 🏆 Ki-Niela: Guía Completa para Desarrolladores
 
-**Versión:** 1.5
+**Versión:** 1.6
 **Última actualización:** 2026-06-01
 **Audiencia:** Programadores de cualquier nivel (junior → senior)
 
@@ -559,12 +559,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 ### Roles & Autorización
 
 **Roles globales (User.globalRole):**
-- `SUPER_ADMIN`: Acceso a `/admin`, puede crear eventos, ver todas las quinielas
+- `SUPER_ADMIN`: Acceso a `/admin`, crea eventos, ve todas las quinielas y **administra CUALQUIER quiniela** (Config, activar/desactivar miembros, roles, partidos estrella) sin necesidad de ser miembro. `getMemberContext` le devuelve un contexto sintético con rol admin.
 - `USER`: Usuario regular, puede crear quinielas y participar
 
 **Roles por quiniela (QuinielaMember.role):**
 - `QUINIELA_ADMIN`: Admin de esa quiniela, puede invitar, activar usuarios, cambiar config
 - `PARTICIPANT`: Participante normal, solo puede registrar predicciones
+
+**Reglas de "mínimo 1 admin":**
+- No se puede desactivar/degradar al **último `QUINIELA_ADMIN` activo** de una quiniela (409). El SUPER_ADMIN puede administrarla igual, pero la quiniela no debe quedar sin admin local.
+- No se puede quitar `SUPER_ADMIN` ni desactivar al **último `SUPER_ADMIN` activo** del sistema (400).
+
+**`isAdminOf(ctx)`** (en `quiniela-auth.ts`) devuelve `true` si `ctx.globalRole === 'SUPER_ADMIN'` **o** si es `QUINIELA_ADMIN` activo. **`PLAYER_MEMBER_FILTER`** (leaderboards/competencia) NO cambia: el SUPER_ADMIN sigue excluido de competir.
 
 **Middleware de autorización:**
 

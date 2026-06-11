@@ -33,6 +33,28 @@ export async function PATCH(
     return NextResponse.json({ error: 'No puedes quitarte el rol de Super Admin a ti mismo.' }, { status: 400 })
   }
 
+  // Guarda global: debe existir al menos un Super Admin activo en el sistema.
+  // Si la acción quita SUPER_ADMIN o desactiva a un super admin, verificamos
+  // que no sea el último super admin activo (sobre cualquier usuario, no solo self).
+  const removesSuperAdmin = parsed.data.globalRole === 'USER' || parsed.data.action === 'deactivate'
+  if (removesSuperAdmin) {
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { globalRole: true, status: true },
+    })
+    if (target?.globalRole === 'SUPER_ADMIN' && target.status === 'ACTIVE') {
+      const otherActiveSupers = await prisma.user.count({
+        where: { globalRole: 'SUPER_ADMIN', status: 'ACTIVE', id: { not: userId } },
+      })
+      if (otherActiveSupers === 0) {
+        return NextResponse.json(
+          { error: 'Debe existir al menos un Super Admin activo en el sistema.' },
+          { status: 400 },
+        )
+      }
+    }
+  }
+
   const data: Record<string, unknown> = {}
   if (parsed.data.action === 'activate') data.status = 'ACTIVE'
   if (parsed.data.action === 'deactivate') data.status = 'INACTIVE'

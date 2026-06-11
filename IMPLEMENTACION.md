@@ -2,7 +2,7 @@
 
 Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qué**, el **por qué** y el **cómo probar/operar**. Para arquitectura general ver [`GUIA_COMPLETA.md`](GUIA_COMPLETA.md); para integración de marcadores ver [`docs/MARCADORES_EN_VIVO.md`](docs/MARCADORES_EN_VIVO.md).
 
-> **Última revisión:** 2026-06-01 (sesión 7) — filtros de participantes + fix seed grupos Mundial
+> **Última revisión:** 2026-06-01 (sesión 8) — permisos SUPER_ADMIN global + mínimo 1 admin + gestión membresías
 
 ---
 
@@ -34,7 +34,8 @@ Changelog narrativo de las features e integraciones del proyecto. Cuenta el **qu
 24. [Mantenimiento de eventos: archivar y borrar torneos completos](#24-mantenimiento-de-eventos-archivar-y-borrar-torneos-completos)
 25. [Filtros: buscar participantes + usuarios sin quiniela](#25-filtros-buscar-participantes--usuarios-sin-quiniela)
 26. [Fix seed: partidos de grupos del Mundial sin equipos en prod](#26-fix-seed-partidos-de-grupos-del-mundial-sin-equipos-en-prod)
-27. [Setup local + troubleshooting](#27-setup-local--troubleshooting)
+27. [Permisos: SUPER_ADMIN administra todo + mínimo 1 admin + gestión de membresías](#27-permisos-super_admin-administra-todo--mínimo-1-admin--gestión-de-membresías)
+28. [Setup local + troubleshooting](#28-setup-local--troubleshooting)
 21. [Setup local + troubleshooting](#21-setup-local--troubleshooting)
 
 ---
@@ -1109,7 +1110,62 @@ Duplicado `evt-fifa-world-2026` ("Copa del Mundo FIFA") detectado en prod: 0 qui
 
 ---
 
-## 27. Setup local + troubleshooting
+## 27. Permisos: SUPER_ADMIN administra todo + mínimo 1 admin + gestión de membresías
+
+### Problemas reportados (4, misma raíz)
+
+`isAdminOf()` en `src/lib/quiniela-auth.ts` solo miraba `role === 'QUINIELA_ADMIN' && status === 'ACTIVE'` e **ignoraba `globalRole === 'SUPER_ADMIN'`**:
+
+1. Al inactivar un QUINIELA_ADMIN, nadie podía reactivarlo (ni un SUPER_ADMIN).
+2. Un usuario ascendido a SUPER_ADMIN no heredaba permisos: no veía Config ni administraba quinielas donde no era miembro / era PARTICIPANT.
+3. No había forma de activar/desactivar la membresía de un usuario en una quiniela desde `/admin/usuarios`.
+4. No se protegía "mínimo 1 admin" (se podía dejar una quiniela sin admin, o el sistema sin super admin).
+
+### Fix núcleo: `getMemberContext` lee `globalRole`
+
+Sin cambiar la firma (para no tocar los ~16 llamadores), `getMemberContext` ahora lee en paralelo la membresía **y** el `globalRole` del usuario:
+
+- Si hay membresía → la devuelve con `globalRole` e `isMember: true`.
+- Si NO hay membresía pero es SUPER_ADMIN → devuelve un **contexto sintético** (`role: QUINIELA_ADMIN, status: ACTIVE, isMember: false`) para que pueda administrar.
+- Usuario normal sin membresía → `null` (no pertenece).
+
+```ts
+export function isAdminOf(m: MemberContext | null): boolean {
+  if (!m) return false
+  if (m.globalRole === 'SUPER_ADMIN') return true
+  return m.role === 'QUINIELA_ADMIN' && m.status === 'ACTIVE'
+}
+```
+
+Como la firma no cambió, los ~16 endpoints que ya hacían `isAdminOf(await getMemberContext(...))` **dejan pasar al SUPER_ADMIN automáticamente**.
+
+**No regresión de competencia:** `PLAYER_MEMBER_FILTER` (leaderboard, matriz, bot) NO cambió — sigue filtrando `role: 'PARTICIPANT'`, así que el SUPER_ADMIN nunca compite.
+
+### Frontend
+
+- `configuracion/page.tsx`: `isAdmin = data?.globalRole === 'SUPER_ADMIN' || (member admin activo)`.
+- `participantes/page.tsx`: si `globalRole === 'SUPER_ADMIN'` → `currentUserRole = 'QUINIELA_ADMIN'` aunque su membresía sea PARTICIPANT.
+
+### Guardas "mínimo 1 admin"
+
+- **Por quiniela** (`members/[memberId]/route.ts` PATCH): si el target es el único `QUINIELA_ADMIN` activo y se lo desactiva/rechaza/degrada → **409** "No puedes dejar la quiniela sin administrador."
+- **Global** (`admin/users/[userId]/route.ts` PATCH): si se quita SUPER_ADMIN o se desactiva al único super admin activo → **400** "Debe existir al menos un Super Admin activo." (Antes solo se protegía contra uno mismo.)
+
+### Gestión de membresías desde `/admin/usuarios`
+
+`/api/admin/users` GET ahora expone `memberId` por membresía. El frontend agrega botones inline **Activar/Desactivar** en cada badge de quiniela, vía `patchMembership()` que llama `PATCH /api/quinielas/[quinielaId]/members/[memberId]` (reusa el endpoint existente, respeta la guarda de último admin). Optimistic update + refresh.
+
+### Probado
+
+- tsc verde (firma intacta → 16 llamadores sin tocar).
+- SUPER_ADMIN ve Config y administra quinielas donde no es miembro.
+- Reactivar un admin de quiniela inactivado: funciona.
+- Guarda de último admin (quiniela y global): bloquea con mensaje.
+- Leaderboard sin cambios: SUPER_ADMIN no aparece compitiendo.
+
+---
+
+## 28. Setup local + troubleshooting
 
 ### Setup
 

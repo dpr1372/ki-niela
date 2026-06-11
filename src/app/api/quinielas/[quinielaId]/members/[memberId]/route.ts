@@ -32,6 +32,24 @@ export async function PATCH(
   const existing = await prisma.quinielaMember.findUnique({ where: { id: memberId, quinielaId } })
   if (!existing) return NextResponse.json({ error: 'Participante no encontrado' }, { status: 404 })
 
+  // Guarda: no dejar la quiniela sin administrador. Si el target es un
+  // QUINIELA_ADMIN ACTIVO y la acción lo desactiva/rechaza o lo degrada a
+  // PARTICIPANT, verificamos que no sea el último admin activo de la quiniela.
+  const targetIsActiveAdmin = existing.role === 'QUINIELA_ADMIN' && existing.status === 'ACTIVE'
+  const willLoseAdmin =
+    targetIsActiveAdmin && (action === 'deactivate' || action === 'reject' || role === 'PARTICIPANT')
+  if (willLoseAdmin) {
+    const activeAdmins = await prisma.quinielaMember.count({
+      where: { quinielaId, role: 'QUINIELA_ADMIN', status: 'ACTIVE' },
+    })
+    if (activeAdmins <= 1) {
+      return NextResponse.json(
+        { error: 'No puedes dejar la quiniela sin administrador. Asigná otro admin primero.' },
+        { status: 409 },
+      )
+    }
+  }
+
   const updateData: Record<string, unknown> = {}
   let auditAction = ''
 

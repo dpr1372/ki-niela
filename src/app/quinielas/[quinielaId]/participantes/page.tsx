@@ -63,8 +63,10 @@ export default function ParticipantesPage() {
       const session = await meRes.json().catch(() => null)
       const myUserId = session?.user?.id
       const me = data.find((m: Member) => m.user.id === myUserId)
-      if (me) setCurrentUserRole(me.role)
-      else if (session?.user?.globalRole === 'SUPER_ADMIN') setCurrentUserRole('QUINIELA_ADMIN')
+      // El SUPER_ADMIN administra cualquier quiniela, sea o no miembro y aunque
+      // su membresía sea PARTICIPANT → siempre lo tratamos como admin local.
+      if (session?.user?.globalRole === 'SUPER_ADMIN') setCurrentUserRole('QUINIELA_ADMIN')
+      else if (me) setCurrentUserRole(me.role)
     }
     setLoading(false)
   }

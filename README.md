@@ -14,6 +14,7 @@ Plataforma web (Next.js + PostgreSQL) para quinielas deportivas **recreativas** 
 - **Marcadores en vivo** desde ESPN (sin API key) vía cron cada minuto, con override manual por partido. Liga a cualquier torneo importado automáticamente.
 - **Posiciones** general / por día / por jornada / por fase. Solo `PARTICIPANT` compite — `QUINIELA_ADMIN` y `SUPER_ADMIN` excluidos del ranking.
 - **Aislamiento por quiniela**: cada usuario ve solo las quinielas donde es miembro. Acceso por código de invitación (auto-servicio) o el admin los agrega directamente.
+- **SUPER_ADMIN administra cualquier quiniela** (Config, miembros, roles) sin ser miembro. Guardas de "mínimo 1 admin" por quiniela y a nivel global. Gestión de membresías por quiniela desde `/admin/usuarios`.
 - **Borrar quiniela** (solo admin) con doble confirmación — borra solo lo de esa quiniela, no afecta Event/Match compartidos por torneo.
 - **Banderas/escudos de equipos** — prioriza logos de ESPN para clubes + selecciones; fallback a mapeo FIFA cuando es necesario.
 - **Banner parametrizable por evento** — edita logo (URL o imagen adjunta), línea amarilla y subtítulo desde `/admin/torneos`. Las imágenes se guardan como data URL en BD (persisten en Railway). Máximo 800 KB.

@@ -12,6 +12,7 @@ import { BallLoader } from '@/components/ui/BallLoader'
 import { Switch } from '@/components/ui/switch'
 
 type Membership = {
+  memberId: string
   quinielaId: string
   quinielaName: string
   quinielaStatus: 'ACTIVE' | 'CLOSED' | 'ARCHIVED'
@@ -168,6 +169,51 @@ export default function AdminUsuariosPage() {
       }
       // Background refresh so the row picks up any server-side derived
       // fields (updatedAt, etc) without spinning a loader.
+      void (async () => {
+        const fresh = await fetch('/api/admin/users')
+        if (fresh.ok) setUsers(await fresh.json())
+      })()
+    } catch {
+      toast.error('Error de red.')
+      setUsers(prevUsers)
+    }
+  }
+
+  // Activar/desactivar la membresía de un usuario en una quiniela específica,
+  // desde el panel admin. Reusa el endpoint de members de la quiniela.
+  async function patchMembership(
+    userId: string,
+    m: Membership,
+    action: 'activate' | 'deactivate',
+  ) {
+    const newStatus = action === 'activate' ? 'ACTIVE' : 'INACTIVE'
+    const prevUsers = users
+    setUsers((curr) =>
+      curr?.map((u) =>
+        u.id !== userId
+          ? u
+          : {
+              ...u,
+              memberships: u.memberships.map((mm) =>
+                mm.memberId === m.memberId ? { ...mm, memberStatus: newStatus } : mm,
+              ),
+            },
+      ) ?? null,
+    )
+    toast.success(action === 'activate' ? 'Miembro activado.' : 'Miembro desactivado.')
+
+    try {
+      const res = await fetch(`/api/quinielas/${m.quinielaId}/members/${m.memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      if (!res.ok) {
+        const info = await res.json().catch(() => null)
+        toast.error(info?.error ?? 'Error al actualizar la membresía.')
+        setUsers(prevUsers)
+        return
+      }
       void (async () => {
         const fresh = await fetch('/api/admin/users')
         if (fresh.ok) setUsers(await fresh.json())
@@ -385,6 +431,25 @@ export default function AdminUsuariosPage() {
                               </span>
                               {m.memberRole === 'QUINIELA_ADMIN' && (
                                 <span className="text-[9px] font-bold text-amber-700">★</span>
+                              )}
+                              {m.memberStatus === 'ACTIVE' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => patchMembership(u.id, m, 'deactivate')}
+                                  className="text-[10px] font-semibold text-red-600 hover:underline"
+                                  title="Desactivar de esta quiniela"
+                                >
+                                  Desactivar
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => patchMembership(u.id, m, 'activate')}
+                                  className="text-[10px] font-semibold text-emerald-700 hover:underline"
+                                  title="Activar en esta quiniela"
+                                >
+                                  Activar
+                                </button>
                               )}
                             </span>
                           ))}

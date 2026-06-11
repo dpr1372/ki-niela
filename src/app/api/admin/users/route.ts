@@ -20,6 +20,7 @@ export async function GET() {
       // Membresías para ver a qué quiniela está unido cada usuario y su estado.
       quinielaMembers: {
         select: {
+          id: true,
           role: true,
           status: true,
           quiniela: { select: { id: true, name: true, status: true } },
@@ -38,6 +39,7 @@ export async function GET() {
     status: u.status,
     createdAt: u.createdAt,
     memberships: u.quinielaMembers.map((m) => ({
+      memberId: m.id,
       quinielaId: m.quiniela.id,
       quinielaName: m.quiniela.name,
       quinielaStatus: m.quiniela.status,

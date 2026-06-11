@@ -224,7 +224,11 @@ export default function ConfiguracionPage() {
   }
 
   const member = data?.member
-  const isAdmin = member?.role === 'QUINIELA_ADMIN' && member?.status === 'ACTIVE'
+  // El SUPER_ADMIN administra cualquier quiniela aunque no sea miembro o sea
+  // solo PARTICIPANT. El endpoint ya devuelve globalRole y un member sintético.
+  const isAdmin =
+    data?.globalRole === 'SUPER_ADMIN' ||
+    (member?.role === 'QUINIELA_ADMIN' && member?.status === 'ACTIVE')
 
   if (!isAdmin) {
     return (
