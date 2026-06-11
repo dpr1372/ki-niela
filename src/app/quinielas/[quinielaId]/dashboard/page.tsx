@@ -12,6 +12,7 @@ import { WorldCupHero } from '@/components/ui/WorldCupHero'
 import { formatCostaRica } from '@/lib/timezone'
 import { flagUrl } from '@/lib/flags'
 import { MyAutoPredictionsToggle } from '@/components/MyAutoPredictionsToggle'
+import { SuperAdminParticipationToggle } from '@/components/SuperAdminParticipationToggle'
 
 function FlagPill({ fifaCode, flag, name }: { fifaCode?: string | null; flag?: string | null; name: string }) {
   const url = flag ?? flagUrl(fifaCode)
@@ -42,8 +43,14 @@ export default async function DashboardPage({
     where: { quinielaId_userId: { quinielaId, userId: session.user.id } },
   })
 
-  if (!member) redirect('/quinielas')
-  if (member.status !== 'ACTIVE') {
+  const isSuperAdmin = session.user.globalRole === 'SUPER_ADMIN'
+  // Un usuario normal debe ser miembro. Un SUPER_ADMIN puede entrar aunque no
+  // tenga membresía (administra cualquier quiniela). Compite solo si su
+  // membresía es PARTICIPANT (toggle "Participar en el puntaje").
+  if (!member && !isSuperAdmin) redirect('/quinielas')
+  const superAdminParticipating = member?.role === 'PARTICIPANT' && member?.status === 'ACTIVE'
+  // El SUPER_ADMIN nunca queda "pendiente": entra siempre como admin.
+  if (!isSuperAdmin && member!.status !== 'ACTIVE') {
     return (
       <AppShell quinielaId={quinielaId}>
         <div className="text-center py-20">
@@ -92,16 +99,15 @@ export default async function DashboardPage({
       _sum: { points: true },
     }),
     // Espeja el endpoint /leaderboard: solo compiten los PARTICIPANT activos
-    // (los QUINIELA_ADMIN no puntúan ni rankean), excluye SUPER_ADMIN globales,
-    // e incluye a cada participante activo aunque tenga 0 partidos puntuados
-    // para que la posición refleje lo que verá en Posiciones.
+    // (los QUINIELA_ADMIN no puntúan ni rankean). Un SUPER_ADMIN compite solo si
+    // eligió participar (su membresía es PARTICIPANT). Incluye a cada participante
+    // activo aunque tenga 0 partidos puntuados para reflejar lo que verá en Posiciones.
     (async () => {
       const activeMembers = await prisma.quinielaMember.findMany({
         where: {
           quinielaId,
           status: 'ACTIVE',
           role: 'PARTICIPANT',
-          user: { globalRole: { not: 'SUPER_ADMIN' } },
         },
         select: { userId: true },
       })
@@ -160,7 +166,7 @@ export default async function DashboardPage({
           <div className="card-pitch rounded-xl p-4 text-center col-span-2 sm:col-span-1 relative overflow-hidden">
             <Users size={64} className="absolute -right-3 -bottom-3 text-blue-400/15" />
             <p className="text-2xl font-black text-blue-900">
-              {member.role === 'QUINIELA_ADMIN' ? '★ Admin' : 'Jugador'}
+              {isSuperAdmin || member?.role === 'QUINIELA_ADMIN' ? '★ Admin' : 'Jugador'}
             </p>
             <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mt-1">Rol</p>
           </div>
@@ -185,7 +191,16 @@ export default async function DashboardPage({
           ))}
         </div>
 
-        {/* Mis predicciones automáticas */}
+        {/* Participar en el puntaje: solo lo ve el SUPER_ADMIN */}
+        {isSuperAdmin && (
+          <SuperAdminParticipationToggle
+            quinielaId={quinielaId}
+            initialParticipating={superAdminParticipating}
+          />
+        )}
+
+        {/* Mis predicciones automáticas (solo si es miembro) */}
+        {member && (
         <MyAutoPredictionsToggle
           quinielaId={quinielaId}
           initialEnabled={member.autoPredictionsEnabled}
@@ -193,6 +208,7 @@ export default async function DashboardPage({
           randomMinGoals={quiniela.randomMinGoals}
           randomMaxGoals={quiniela.randomMaxGoals}
         />
+        )}
 
         {/* Upcoming matches */}
         {upcomingMatches.length > 0 && (

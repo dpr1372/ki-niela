@@ -71,7 +71,7 @@ export default function AppShell({ children, quinielaId, quinielaName }: Props) 
         ...(isSuperAdmin
           ? [{ href: `/quinielas/${quinielaId}/eliminatorias`, label: 'Eliminatorias', icon: Swords }]
           : []),
-        ...(quinielaAdminRole
+        ...(isAdminContext
           ? [{ href: `/quinielas/${quinielaId}/participantes`, label: 'Participantes', icon: Users }]
           : []),
         ...(isAdminContext

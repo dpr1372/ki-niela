@@ -46,14 +46,15 @@ export async function GET(
   }
 
   // Solo compiten los PARTICIPANT activos. Los QUINIELA_ADMIN administran la
-  // quiniela pero NO acumulan puntos ni aparecen en posiciones. Los SUPER_ADMIN
-  // globales tampoco son competidores (filtro extra de seguridad).
+  // quiniela pero NO acumulan puntos ni aparecen en posiciones. Un SUPER_ADMIN
+  // compite SOLO si eligió participar (membresía PARTICIPANT+ACTIVE vía el
+  // toggle del dashboard); si es admin/no-miembro, su role no es PARTICIPANT y
+  // queda fuera por el mismo filtro.
   const activeMembers = await prisma.quinielaMember.findMany({
     where: {
       quinielaId,
       status: 'ACTIVE',
       role: 'PARTICIPANT',
-      user: { globalRole: { not: 'SUPER_ADMIN' } },
     },
     select: { userId: true },
   })

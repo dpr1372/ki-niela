@@ -1161,7 +1161,21 @@ Como la firma no cambió, los ~16 endpoints que ya hacían `isAdminOf(await getM
 - SUPER_ADMIN ve Config y administra quinielas donde no es miembro.
 - Reactivar un admin de quiniela inactivado: funciona.
 - Guarda de último admin (quiniela y global): bloquea con mensaje.
-- Leaderboard sin cambios: SUPER_ADMIN no aparece compitiendo.
+- Leaderboard sin cambios: SUPER_ADMIN no aparece compitiendo (salvo que elija participar, ver abajo).
+
+### Seguimiento: menú Participantes + toggle "Participar en el puntaje"
+
+- **Fix menú:** `AppShell.tsx` mostraba "Participantes" solo con `quinielaAdminRole`; cambiado a
+  `isAdminContext` (consistente con Config/Juegos), así un SUPER_ADMIN no-miembro también lo ve.
+- **Toggle participar (solo SUPER_ADMIN):** el SUPER_ADMIN está excluido del puntaje por defecto. Ahora
+  el dashboard muestra un toggle "Participar en el puntaje" — **visible solo para SUPER_ADMIN**:
+  - `POST /api/quinielas/[id]/me/participation { participate }` → upsert de su membresía a
+    `PARTICIPANT+ACTIVE` (compite) o `QUINIELA_ADMIN+ACTIVE` (solo administra).
+  - Se quitó el filtro extra `globalRole: { not: 'SUPER_ADMIN' }` de `leaderboard` y `dashboard`; ahora
+    el único criterio de "jugador" es `role: PARTICIPANT` (sin migración). Un SUPER_ADMIN participando
+    rankea; uno administrando no.
+  - El dashboard permite entrar al SUPER_ADMIN aunque no sea miembro (no lo expulsa), tratándolo como
+    admin (badge "★ Admin").
 
 ---
 
