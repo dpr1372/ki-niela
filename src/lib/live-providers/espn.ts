@@ -255,6 +255,47 @@ export async function fetchByDate(
   return out
 }
 
+/**
+ * Fetch ONLY the authoritative kickoff (ISO UTC) for a batch of fixtures.
+ *
+ * Date-independent: uses the /summary?event= endpoint (one request per id),
+ * which carries the kickoff under header.competitions[0].date regardless of
+ * what day the match is on. This is why it's a separate function from
+ * fetchFixtures() — that one builds a dates=<today> query and its /summary
+ * fallback reads header.date (top-level), which is null in summary responses,
+ * so it can't recover the kickoff for scheduled (future) matches.
+ *
+ * Tolerant: ids that fail or carry no date are simply omitted from the result.
+ */
+export async function fetchKickoffs(
+  externalIds: string[],
+): Promise<{ externalId: string; kickoffIsoUtc: string }[]> {
+  if (externalIds.length === 0) return []
+
+  const results = await Promise.allSettled(
+    externalIds.map(async (compoundId) => {
+      const [leagueSlug, eventId] = compoundId.includes('|')
+        ? compoundId.split('|', 2)
+        : ['fifa.world', compoundId]
+
+      const summary = await espnFetch<{
+        header?: { date?: string; competitions?: Array<{ date?: string }> }
+      }>(`/${leagueSlug}/summary?event=${eventId}`)
+
+      const iso = summary.header?.competitions?.[0]?.date ?? summary.header?.date
+      if (!iso) throw new Error(`No kickoff date for ${compoundId}`)
+      return { externalId: compoundId, kickoffIsoUtc: iso }
+    }),
+  )
+
+  return results
+    .filter(
+      (r): r is PromiseFulfilledResult<{ externalId: string; kickoffIsoUtc: string }> =>
+        r.status === 'fulfilled',
+    )
+    .map((r) => r.value)
+}
+
 // ── Tournament import ────────────────────────────────────────────────────────
 
 export type ImportTeam = {

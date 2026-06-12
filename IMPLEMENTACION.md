@@ -1303,6 +1303,42 @@ vos, ignorá este correo".
 
 ---
 
+## 30. Corregir horarios de partidos (kickoff) contra ESPN
+
+**Bug reportado.** Algunos partidos mostraban la hora incorrecta en Costa Rica (ej. USA vs Paraguay a
+las **5pm** cuando es a las **7pm**). El desfase **no era uniforme**: Canadá vs Bosnia (Toronto) salía
+bien a las 13:00, pero USA vs Paraguay (SoFi, Inglewood CA) salía 2h antes. Es un problema **multi-zona**
+— las sedes del Mundial 2026 están en México/USA/Canadá (UTC-5/-6/-7).
+
+**Causa raíz.** El bug es **dato en la BD**, no de render. La UI ya formatea correctamente desde
+`kickoffAtUtc` con `timeZone: 'America/Costa_Rica'` (`MatchCard.tsx`), y el import desde ESPN
+(`import-tournament.ts`) guarda el instante UTC real. Los horarios malos venían de valores `kickoffUtc`
+**hardcodeados a mano** en `scripts/seed-mundial-knockouts.ts` (la conversión venue→UTC se hizo mal).
+ESPN tiene el instante autoritativo (`fifa.world|760417` = `2026-06-13T01:00Z` → 19:00 CR). El sync de
+live-scores nunca toca `kickoffAtUtc`, así que la hora mala nunca se corregía sola.
+
+**Impacto.** El bloqueo de cada partido se calcula desde `kickoffAtUtc` (`isMatchLocked` en
+`timezone.ts`). Una hora UTC adelantada = el partido se bloquea antes de lo real. Corregir el horario
+corrige también el bloqueo.
+
+**Solución.** Re-sync de kickoff que corre **dentro de Railway** (donde el código alcanza la BD):
+- `src/lib/live-providers/espn.ts` → nueva `fetchKickoffs(externalIds)`: lee el instante autoritativo
+  vía `/{slug}/summary?event=` (independiente de fecha; `header.competitions[0].date`). Se hizo función
+  aparte de `fetchFixtures` porque ésta arma `dates=<hoy>` y su fallback `/summary` lee `header.date`
+  (top-level), que es `null` en summary → no recupera kickoff de partidos futuros.
+- `src/app/api/admin/sync-kickoffs/route.ts` (POST, solo SUPER_ADMIN): consulta ESPN para cada partido
+  con `externalId` y status NO en {FINALIZADO, CANCELADO, POSTERGADO}; compara contra `kickoffAtUtc`.
+  Body `{ apply }`: `false` (default) = dry-run que devuelve `changes[]`; `true` = reescribe
+  `kickoffAtUtc` + `kickoffAtCostaRica` (`toZonedTime(utc, TZ)`, misma derivación que el import) +
+  `lastSyncAt`. **No toca** predicciones, marcadores, resultados, status ni orientación.
+- `src/app/admin/partidos/page.tsx` → botón **"Corregir horarios"**: hace dry-run, muestra un `confirm`
+  con el resumen (`USA vs Paraguay: 5pm → 7pm`) y, al confirmar, aplica.
+
+**Probado.** `tsc --noEmit` y `next build` verdes. En prod: dry-run lista USA vs Paraguay (Δ +120 min);
+al aplicar, `/pronosticos` muestra 19:00 (7pm) y Canadá sigue en 13:00.
+
+---
+
 ## Commits relevantes (cronológicos)
 
 | Commit | Tema |

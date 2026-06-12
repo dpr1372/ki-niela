@@ -12,6 +12,7 @@ Plataforma web (Next.js + PostgreSQL) para quinielas deportivas **recreativas** 
 - **Bot de pronósticos aleatorios** con doble compuerta: el admin lo activa por quiniela y cada participante lo activa para sí mismo. Independiente del status del partido (ventana temporal, no status=BLOQUEADO).
 - **Cálculo automático de puntos** (3/1/0 normal, 5/3/0 estrella; en eliminatorias cuenta el marcador a 90' o 120', no penales).
 - **Marcadores en vivo** desde ESPN (sin API key) vía cron cada minuto, con override manual por partido. Liga a cualquier torneo importado automáticamente.
+- **Corregir horarios** — botón en `/admin/partidos` que re-sincroniza el `kickoffAtUtc` de los partidos contra ESPN (muestra un previo antes de aplicar). Útil cuando la hora cargada quedó mal (sedes en distintas zonas: México/USA/Canadá); corrige también el bloqueo, que depende de esa hora.
 - **Posiciones** general / por día / por jornada / por fase. Solo `PARTICIPANT` compite — `QUINIELA_ADMIN` y `SUPER_ADMIN` excluidos del ranking.
 - **Aislamiento por quiniela**: cada usuario ve solo las quinielas donde es miembro. Acceso por código de invitación (auto-servicio) o el admin los agrega directamente.
 - **SUPER_ADMIN administra cualquier quiniela** (Config, miembros, roles) sin ser miembro. Guardas de "mínimo 1 admin" por quiniela y a nivel global. Gestión de membresías por quiniela desde `/admin/usuarios`.

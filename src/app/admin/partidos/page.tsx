@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { BallLoader } from '@/components/ui/BallLoader'
-import { Search, Link2, Unlink, Zap, UserCog, RefreshCw, CheckCircle2, Trash2, Pencil } from 'lucide-react'
+import { Search, Link2, Unlink, Zap, UserCog, RefreshCw, CheckCircle2, Trash2, Pencil, Clock } from 'lucide-react'
 import { teamsMatch } from '@/lib/team-matching'
 
 type Match = {
@@ -75,6 +75,7 @@ export default function AdminPartidosPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState<string>('')
   const [syncing, setSyncing] = useState(false)
+  const [fixingTimes, setFixingTimes] = useState(false)
   const [scoreEditId, setScoreEditId] = useState<string | null>(null)
   const [scoreHome, setScoreHome] = useState<string>('')
   const [scoreAway, setScoreAway] = useState<string>('')
@@ -304,6 +305,65 @@ export default function AdminPartidosPage() {
     }
   }
 
+  // Corrige los horarios (kickoff) de los partidos contra ESPN. Primero hace un
+  // dry-run que lista los cambios; con confirmación del admin, los aplica.
+  async function fixKickoffs() {
+    setFixingTimes(true)
+    try {
+      // 1) Dry-run: ver qué cambiaría sin escribir.
+      const dry = await fetch('/api/admin/sync-kickoffs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apply: false }),
+      })
+      const dryJson = await dry.json().catch(() => null)
+      if (!dry.ok) {
+        toast.error(dryJson?.error ?? `Error ${dry.status} al revisar horarios.`)
+        return
+      }
+      const changes: { label: string; fromIso: string; toIso: string }[] = dryJson?.changes ?? []
+      if (changes.length === 0) {
+        toast.success('Todos los horarios ya están correctos.')
+        return
+      }
+
+      // 2) Confirmar con un resumen legible (hora CR antes → después).
+      const crHour = (iso: string) =>
+        new Date(iso).toLocaleTimeString('es-CR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'America/Costa_Rica',
+        })
+      const preview = changes
+        .slice(0, 8)
+        .map((c) => `• ${c.label}: ${crHour(c.fromIso)} → ${crHour(c.toIso)}`)
+        .join('\n')
+      const extra = changes.length > 8 ? `\n…y ${changes.length - 8} más.` : ''
+      const ok = window.confirm(
+        `Se corregirán ${changes.length} horario(s) desde ESPN:\n\n${preview}${extra}\n\n¿Aplicar?`,
+      )
+      if (!ok) return
+
+      // 3) Aplicar.
+      const res = await fetch('/api/admin/sync-kickoffs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apply: true }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        toast.error(json?.error ?? `Error ${res.status} al aplicar.`)
+        return
+      }
+      toast.success(`${json?.changed ?? 0} horario(s) corregido(s).`)
+      await loadMatches()
+    } catch (e) {
+      toast.error(`Error: ${(e as Error).message}`)
+    } finally {
+      setFixingTimes(false)
+    }
+  }
+
   const events = useMemo(() => {
     if (!matches) return []
     const map = new Map<string, string>()
@@ -432,6 +492,15 @@ export default function AdminPartidosPage() {
               </Button>
               <Button size="sm" variant="outline" onClick={runSync} disabled={syncing}>
                 <Zap size={14} /> {syncing ? 'Sync…' : 'Test sync'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={fixKickoffs}
+                disabled={fixingTimes}
+                title="Corrige los horarios de los partidos contra ESPN (muestra un previo antes de aplicar)"
+              >
+                <Clock size={14} /> {fixingTimes ? 'Corrigiendo…' : 'Corregir horarios'}
               </Button>
               <Button
                 size="sm"
